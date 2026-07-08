@@ -1,0 +1,73 @@
+"""The {{ cli_name }} command: a delivery adapter around the core *and* the repo's
+task runner (so there is no Makefile to maintain across platforms)."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+
+import typer
+
+app = typer.Typer(
+    help="{{ project_name }} developer CLI and task runner.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+
+
+@app.command()
+def hello(name: str = typer.Argument("world")) -> None:
+    """Print a greeting — the simplest end-to-end smoke test."""
+    typer.echo(f"Hello, {name}! {{ project_name }} is alive.")
+
+
+@app.command()
+def dev(port: int = 8000, reload: bool = True) -> None:
+    """Run the backend dev server (FastAPI via uvicorn)."""
+    import uvicorn
+
+    uvicorn.run(
+        "{{ pkg_slug }}_backend.app:app",
+        host="127.0.0.1",
+        port=port,
+        reload=reload,
+    )
+
+
+@app.command()
+def doctor() -> None:
+    """Check that the expected local toolchain is present."""
+    required = {"python": sys.executable, "node": shutil.which("node")}
+    optional = {"pnpm": shutil.which("pnpm"), "docker": shutil.which("docker")}
+
+    healthy = True
+    typer.echo("Required:")
+    for name, value in required.items():
+        ok = bool(value)
+        healthy = healthy and ok
+        typer.echo(f"  [{'OK' if ok else '--'}] {name}: {value or 'NOT FOUND'}")
+    typer.echo("Optional:")
+    for name, value in optional.items():
+        typer.echo(f"  [{'OK' if value else '  '}] {name}: {value or 'not found'}")
+
+    if not healthy:
+        typer.echo("\nSome required tools are missing.", err=True)
+        raise typer.Exit(1)
+    typer.echo("\nAll good.")
+
+
+@app.command()
+def test() -> None:
+    """Run the Python test suite."""
+    raise typer.Exit(subprocess.call(["uv", "run", "pytest"]))
+
+
+@app.command()
+def lint() -> None:
+    """Run ruff over the workspace."""
+    raise typer.Exit(subprocess.call(["uv", "run", "ruff", "check", "."]))
+
+
+if __name__ == "__main__":
+    app()

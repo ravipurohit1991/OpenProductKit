@@ -1,0 +1,13 @@
+[project]
+name = "{{ pkg_slug }}-core"
+version = "0.1.0"
+description = "Domain models and ports. Pure Python — no I/O, no frameworks."
+requires-python = ">={{ python_version }}"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ pkg_slug }}_core"]

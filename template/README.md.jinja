@@ -1,0 +1,42 @@
+# {{ project_name }}
+
+> {{ project_description }}
+
+Generated from [OpenProductKit](https://github.com/youruser/openproductkit) — a white-label product-template built around **one decoupled core** with thin web / CLI adapters.
+
+## Architecture
+
+```
+packages/core        Pure Python domain models + Repository ports. No FastAPI, no DB, no HTTP.
+apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
+apps/cli             Typer CLI + task runner ({{ cli_name }}).
+apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
+```
+
+Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
+
+## Develop
+
+```bash
+uv sync --dev                 # install the Python workspace
+uv run {{ cli_name }} hello         # smoke test
+uv run {{ cli_name }} doctor        # check your toolchain
+uv run {{ cli_name }} dev           # API + a basic web page on http://127.0.0.1:8000
+
+# Rich web UI (separate terminal):
+pnpm install
+pnpm -C apps/frontend dev     # http://127.0.0.1:5173 (proxies /api to the backend)
+```
+
+## Test & lint
+
+```bash
+uv run {{ cli_name }} test          # pytest across the workspace
+uv run {{ cli_name }} lint          # ruff
+```
+
+## Keep up to date with the template
+
+```bash
+copier update                 # pull upstream OpenProductKit improvements
+```
