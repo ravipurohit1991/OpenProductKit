@@ -1,0 +1,54 @@
+"""HTTP routes for projects."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from {{ pkg_slug }}_core.domain.project import Project
+from {{ pkg_slug }}_core.errors import ProjectNotFoundError
+
+from ..deps import ProjectServiceDep
+
+router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+class ProjectIn(BaseModel):
+    name: str
+
+
+class ProjectOut(BaseModel):
+    id: str
+    name: str
+    created_at: str
+
+
+def _to_out(project: Project) -> ProjectOut:
+    return ProjectOut(
+        id=project.id,
+        name=project.name,
+        created_at=project.created_at.isoformat(),
+    )
+
+
+@router.get("", response_model=list[ProjectOut])
+def list_projects(svc: ProjectServiceDep) -> list[ProjectOut]:
+    return [_to_out(p) for p in svc.list()]
+
+
+@router.post("", response_model=ProjectOut, status_code=201)
+def create_project(payload: ProjectIn, svc: ProjectServiceDep) -> ProjectOut:
+    try:
+        project = svc.create(payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _to_out(project)
+
+
+@router.get("/{project_id}", response_model=ProjectOut)
+def get_project(project_id: str, svc: ProjectServiceDep) -> ProjectOut:
+    try:
+        project = svc.get(project_id)
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _to_out(project)

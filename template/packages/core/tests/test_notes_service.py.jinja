@@ -1,13 +1,29 @@
 """Core tests run with zero infrastructure — the proof that the core is pure.
 
-The repository is a plain in-memory fake; no database, no FastAPI, no network.
+The repositories are plain in-memory fakes; no database, no FastAPI, no network.
 """
 
 import pytest
 
-from {{ pkg_slug }}_core.domain.note import Note
-from {{ pkg_slug }}_core.errors import NoteNotFoundError
+from {{ pkg_slug }}_core.domain.note import Note, normalize_tags
+from {{ pkg_slug }}_core.domain.project import Project
+from {{ pkg_slug }}_core.errors import NoteNotFoundError, ProjectNotFoundError
 from {{ pkg_slug }}_core.services.notes import NoteService
+from {{ pkg_slug }}_core.services.projects import ProjectService
+
+
+class FakeProjectRepository:
+    def __init__(self) -> None:
+        self._store: dict[str, Project] = {}
+
+    def add(self, project: Project) -> None:
+        self._store[project.id] = project
+
+    def list(self) -> list[Project]:
+        return list(self._store.values())
+
+    def get(self, project_id: str) -> Project | None:
+        return self._store.get(project_id)
 
 
 class FakeNoteRepository:
@@ -17,26 +33,79 @@ class FakeNoteRepository:
     def add(self, note: Note) -> None:
         self._store[note.id] = note
 
-    def list(self) -> list[Note]:
-        return list(self._store.values())
-
     def get(self, note_id: str) -> Note | None:
         return self._store.get(note_id)
 
+    def list(self, *, project_id=None, tag=None, query=None) -> list[Note]:
+        notes = list(self._store.values())
+        if project_id is not None:
+            notes = [n for n in notes if n.project_id == project_id]
+        if tag is not None:
+            notes = [n for n in notes if tag in n.tags]
+        if query is not None:
+            notes = [n for n in notes if n.matches(query)]
+        return notes
 
-def test_create_and_list() -> None:
-    svc = NoteService(FakeNoteRepository())
-    note = svc.create("hello", "world")
-    assert svc.list() == [note]
-    assert svc.get(note.id) == note
+
+@pytest.fixture()
+def services():
+    projects = FakeProjectRepository()
+    notes = FakeNoteRepository()
+    return ProjectService(projects), NoteService(notes, projects)
 
 
-def test_get_missing_raises() -> None:
-    svc = NoteService(FakeNoteRepository())
+def test_create_note_under_project(services) -> None:
+    project_svc, note_svc = services
+    project = project_svc.create("Research")
+    note = note_svc.create(project.id, "Read paper", tags=["ML", "todo"])
+    assert note.project_id == project.id
+    assert note.tags == ("ml", "todo")
+    assert note_svc.get(note.id) == note
+
+
+def test_note_requires_existing_project(services) -> None:
+    _, note_svc = services
+    with pytest.raises(ProjectNotFoundError):
+        note_svc.create("missing", "orphan note")
+
+
+def test_missing_note_raises(services) -> None:
+    _, note_svc = services
     with pytest.raises(NoteNotFoundError):
-        svc.get("does-not-exist")
+        note_svc.get("nope")
+
+
+def test_search_by_project_tag_and_query(services) -> None:
+    project_svc, note_svc = services
+    a = project_svc.create("A")
+    b = project_svc.create("B")
+    note_svc.create(a.id, "Alpha note", "about kittens", tags=["cats"])
+    note_svc.create(a.id, "Beta note", "about puppies", tags=["dogs"])
+    note_svc.create(b.id, "Gamma note", tags=["cats"])
+
+    assert {n.title for n in note_svc.search(project_id=a.id)} == {
+        "Alpha note",
+        "Beta note",
+    }
+    assert {n.title for n in note_svc.search(tag="cats")} == {
+        "Alpha note",
+        "Gamma note",
+    }
+    assert {n.title for n in note_svc.search(query="puppies")} == {"Beta note"}
+    assert {n.title for n in note_svc.search(project_id=a.id, tag="cats")} == {
+        "Alpha note"
+    }
 
 
 def test_empty_title_rejected() -> None:
     with pytest.raises(ValueError):
-        Note(title="   ")
+        Note(project_id="p", title="   ")
+
+
+def test_tag_normalization() -> None:
+    assert normalize_tags(["  Foo ", "foo", "BAR", ""]) == ("foo", "bar")
+
+
+def test_project_service_get_missing() -> None:
+    with pytest.raises(ProjectNotFoundError):
+        ProjectService(FakeProjectRepository()).get("nope")

@@ -15,6 +15,27 @@ apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
 
 Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
 
+## The demo: a small Resource Vault
+
+Projects group notes; notes carry tags; you can search notes by project, tag or
+free text. The same core services power the web API, the CLI and (later) the
+desktop app.
+
+```bash
+# via the CLI adapter
+uv run {{ cli_name }} project add "Research"
+uv run {{ cli_name }} project list
+uv run {{ cli_name }} note add <project-id> "Read paper" --tag ml --tag todo
+uv run {{ cli_name }} note list --q paper
+```
+
+```
+GET/POST /api/projects            list / create projects
+GET      /api/projects/{id}       fetch a project
+GET/POST /api/notes               search (?project_id=&tag=&q=) / create
+GET      /api/notes/{id}          fetch a note
+```
+
 ## Develop
 
 ```bash

@@ -39,12 +39,12 @@ apps/cli             Typer CLI + task runner. Another adapter around the same co
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
 ```
 
-The rule that keeps this template honest: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
+The rule that keeps this template straight forward: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
 
 ## What's here today (v1 — in progress)
 
 - [x] **P1** Shippable skeleton: hexagonal `core`, FastAPI backend, Typer CLI, React web UI, CI, one-command dev
-- [ ] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search)
+- [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
 - [ ] **P3** Generated typed clients (OpenAPI → TS + TanStack Query)
 - [ ] **P4** CLI as framework / task runner
 - [ ] **P5** Extension manager (dev-time Python plugins)

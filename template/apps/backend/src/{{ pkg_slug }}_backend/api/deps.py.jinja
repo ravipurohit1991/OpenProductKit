@@ -1,4 +1,4 @@
-"""FastAPI dependency wiring: build a NoteService backed by the SQL repository.
+"""FastAPI dependency wiring: build services backed by the SQL repositories.
 
 Uses `Annotated` dependencies (the modern FastAPI idiom) so the wiring is
 reusable and lint-clean.
@@ -12,15 +12,21 @@ from fastapi import Depends
 from sqlmodel import Session
 
 from {{ pkg_slug }}_core.services.notes import NoteService
+from {{ pkg_slug }}_core.services.projects import ProjectService
 
 from ..adapters.db.engine import get_session
-from ..adapters.db.repository import SqlNoteRepository
+from ..adapters.db.repository import SqlNoteRepository, SqlProjectRepository
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
+def get_project_service(session: SessionDep) -> ProjectService:
+    return ProjectService(SqlProjectRepository(session))
+
+
 def get_note_service(session: SessionDep) -> NoteService:
-    return NoteService(SqlNoteRepository(session))
+    return NoteService(SqlNoteRepository(session), SqlProjectRepository(session))
 
 
+ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 NoteServiceDep = Annotated[NoteService, Depends(get_note_service)]
