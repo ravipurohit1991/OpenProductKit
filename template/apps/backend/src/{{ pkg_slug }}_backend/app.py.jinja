@@ -6,9 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
-from .adapters.db.engine import init_db
 from .api.routes.notes import router as notes_router
 from .api.routes.projects import router as projects_router
+from .db import upgrade_head
 from .settings import settings
 
 _INDEX = """<!doctype html>
@@ -23,7 +23,9 @@ _INDEX = """<!doctype html>
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    # Apply migrations on startup so dev and tests are zero-config while
+    # migrations remain the single source of truth for the schema.
+    upgrade_head()
     yield
 
 

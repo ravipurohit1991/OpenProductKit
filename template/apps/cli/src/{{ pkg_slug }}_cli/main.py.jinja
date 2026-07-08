@@ -1,8 +1,13 @@
 """The {{ cli_name }} command: a delivery adapter around the core *and* the repo's
-task runner (so there is no Makefile to maintain across platforms).
+task runner and control plane (so there is no Makefile to maintain across
+platforms).
 
-The `project` and `note` groups talk to the same core services the web API uses,
-just through a different adapter — the whole point of the template.
+Command groups:
+  {{ cli_name }} project …   manage projects (core adapter)
+  {{ cli_name }} note …      manage notes (core adapter)
+  {{ cli_name }} db …        database migrations (Alembic)
+  {{ cli_name }} build …     build artifacts
+plus dev / doctor / info / test / lint / fmt / openapi / gen / version.
 """
 
 from __future__ import annotations
@@ -14,39 +19,80 @@ import sys
 import typer
 from sqlmodel import Session
 
-from {{ pkg_slug }}_backend.adapters.db.engine import engine, init_db
+from {{ pkg_slug }}_backend.adapters.db.engine import engine
 from {{ pkg_slug }}_backend.adapters.db.repository import (
     SqlNoteRepository,
     SqlProjectRepository,
 )
+from {{ pkg_slug }}_backend.db import downgrade, make_revision, upgrade_head
 from {{ pkg_slug }}_core.errors import CoreError
 from {{ pkg_slug }}_core.services.notes import NoteService
 from {{ pkg_slug }}_core.services.projects import ProjectService
 
 app = typer.Typer(
-    help="{{ project_name }} developer CLI and task runner.",
+    help="{{ project_name }} developer CLI, task runner and control plane.",
     no_args_is_help=True,
     add_completion=False,
 )
 
 project_app = typer.Typer(help="Manage projects.", no_args_is_help=True)
 note_app = typer.Typer(help="Manage notes.", no_args_is_help=True)
+db_app = typer.Typer(help="Database migrations.", no_args_is_help=True)
+build_app = typer.Typer(help="Build artifacts.", no_args_is_help=True)
 app.add_typer(project_app, name="project")
 app.add_typer(note_app, name="note")
+app.add_typer(db_app, name="db")
+app.add_typer(build_app, name="build")
 
 
 def _session() -> Session:
-    init_db()
+    upgrade_head()
     return Session(engine)
 
 
-# --- smoke test / task runner -------------------------------------------------
+def _run(cmd: list[str]) -> int:
+    """Run an external tool, resolving its path first.
+
+    On Windows, `pnpm`/`npx` are `.CMD` shims that bare `subprocess` cannot find
+    without PATHEXT resolution, so we resolve via `shutil.which` up front.
+    """
+    exe = shutil.which(cmd[0])
+    if exe is None:
+        typer.echo(f"Required tool not found on PATH: {cmd[0]}", err=True)
+        raise typer.Exit(127)
+    return subprocess.call([exe, *cmd[1:]])
+
+
+# --- smoke test / info --------------------------------------------------------
 
 
 @app.command()
 def hello(name: str = typer.Argument("world")) -> None:
     """Print a greeting — the simplest end-to-end smoke test."""
     typer.echo(f"Hello, {name}! {{ project_name }} is alive.")
+
+
+@app.command()
+def info() -> None:
+    """Show project and environment information."""
+    from {{ pkg_slug }}_backend.settings import settings
+
+    typer.echo("{{ project_name }}")
+    typer.echo(f"  python:   {sys.version.split()[0]}")
+    typer.echo(f"  database: {settings.database_url}")
+    typer.echo(f"  node:     {shutil.which('node') or 'not found'}")
+    typer.echo(f"  pnpm:     {shutil.which('pnpm') or 'not found'}")
+
+
+@app.command()
+def version() -> None:
+    """Print the CLI version."""
+    from importlib.metadata import version as _version
+
+    typer.echo(_version("{{ pkg_slug }}-cli"))
+
+
+# --- dev / quality ------------------------------------------------------------
 
 
 @app.command()
@@ -87,13 +133,19 @@ def doctor() -> None:
 @app.command()
 def test() -> None:
     """Run the Python test suite."""
-    raise typer.Exit(subprocess.call(["uv", "run", "pytest"]))
+    raise typer.Exit(_run(["uv", "run", "pytest"]))
 
 
 @app.command()
 def lint() -> None:
     """Run ruff over the workspace."""
-    raise typer.Exit(subprocess.call(["uv", "run", "ruff", "check", "."]))
+    raise typer.Exit(_run(["uv", "run", "ruff", "check", "."]))
+
+
+@app.command()
+def fmt() -> None:
+    """Format the workspace with ruff."""
+    raise typer.Exit(_run(["uv", "run", "ruff", "format", "."]))
 
 
 @app.command()
@@ -113,10 +165,53 @@ def openapi(output: str = typer.Option("openapi.json", "--output", "-o")) -> Non
 def gen() -> None:
     """Regenerate the typed frontend client from the backend OpenAPI schema."""
     openapi(output="openapi.json")
-    code = subprocess.call(["pnpm", "-C", "apps/frontend", "gen:client"])
+    code = _run(["pnpm", "-C", "apps/frontend", "gen:client"])
     if code == 0:
         typer.echo("Client regenerated at apps/frontend/src/client/schema.d.ts")
     raise typer.Exit(code)
+
+
+# --- database -----------------------------------------------------------------
+
+
+@db_app.command("migrate")
+def db_migrate() -> None:
+    """Apply all pending migrations (upgrade to head)."""
+    upgrade_head()
+    typer.echo("Database is at head.")
+
+
+@db_app.command("revision")
+def db_revision(
+    message: str = typer.Option(..., "--message", "-m", help="Migration message."),
+) -> None:
+    """Autogenerate a new migration from model changes."""
+    make_revision(message)
+    typer.echo("Created migration under apps/backend/migrations/versions/.")
+
+
+@db_app.command("downgrade")
+def db_downgrade(revision: str = typer.Argument("-1")) -> None:
+    """Revert migrations (default: one step)."""
+    downgrade(revision)
+    typer.echo(f"Downgraded to {revision}.")
+
+
+@db_app.command("reset")
+def db_reset() -> None:
+    """Drop everything and re-apply all migrations."""
+    downgrade("base")
+    upgrade_head()
+    typer.echo("Database reset to a fresh head.")
+
+
+# --- build --------------------------------------------------------------------
+
+
+@build_app.command("web")
+def build_web() -> None:
+    """Build the production web bundle."""
+    raise typer.Exit(_run(["pnpm", "-C", "apps/frontend", "build"]))
 
 
 # --- projects -----------------------------------------------------------------
