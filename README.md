@@ -46,7 +46,7 @@ The rule that keeps this template straight forward: **business logic never leaks
 - [x] **P1** Shippable skeleton: hexagonal `core`, FastAPI backend, Typer CLI, React web UI, CI, one-command dev
 - [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
 - [x] **P3** Generated typed client (OpenAPI → openapi-typescript + openapi-fetch + TanStack Query hooks)
-- [ ] **P4** CLI as framework / task runner
+- [x] **P4** CLI as framework / control plane (Alembic migrations, `db`/`build` groups, `info`/`fmt`/`version`)
 - [ ] **P5** Extension manager (dev-time Python plugins)
 - [ ] **P6** Rebranding via Copier + docs site
 

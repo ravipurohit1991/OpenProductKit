@@ -63,11 +63,26 @@ uv run {{ cli_name }} gen            # dump OpenAPI + regenerate src/client/sche
 Change an endpoint and forget to update a call site, and the TypeScript build
 fails — drift is caught by the compiler.
 
-## Test & lint
+## Database migrations
+
+Alembic is the single source of truth for the schema (migrations are applied
+automatically on app startup, so dev and tests are zero-config).
+
+```bash
+uv run {{ cli_name }} db migrate                 # apply pending migrations
+uv run {{ cli_name }} db revision -m "add x"     # autogenerate a migration from model changes
+uv run {{ cli_name }} db downgrade               # revert one step
+uv run {{ cli_name }} db reset                   # drop everything and re-apply
+```
+
+## Test, lint & build
 
 ```bash
 uv run {{ cli_name }} test          # pytest across the workspace
-uv run {{ cli_name }} lint          # ruff
+uv run {{ cli_name }} lint          # ruff check
+uv run {{ cli_name }} fmt           # ruff format
+uv run {{ cli_name }} build web     # production web bundle
+uv run {{ cli_name }} info          # project + environment summary
 ```
 
 ## Keep up to date with the template
