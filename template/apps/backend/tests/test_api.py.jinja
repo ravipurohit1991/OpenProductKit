@@ -17,21 +17,70 @@ def test_health(client) -> None:
     assert resp.json() == {"status": "ok"}
 
 
-def test_create_list_and_get_note(client) -> None:
-    created = client.post("/api/notes", json={"title": "First", "body": "hi"})
-    assert created.status_code == 201
-    note_id = created.json()["id"]
+def _make_project(client, name: str) -> str:
+    resp = client.post("/api/projects", json={"name": name})
+    assert resp.status_code == 201
+    return resp.json()["id"]
 
-    listing = client.get("/api/notes")
-    assert any(n["id"] == note_id for n in listing.json())
 
-    fetched = client.get(f"/api/notes/{note_id}")
-    assert fetched.status_code == 200
-    assert fetched.json()["title"] == "First"
+def test_create_project_and_note_with_tags(client) -> None:
+    project_id = _make_project(client, "Research")
+    resp = client.post(
+        "/api/notes",
+        json={
+            "project_id": project_id,
+            "title": "Read paper",
+            "tags": ["ML", "ml", "TODO"],
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["project_id"] == project_id
+    assert body["tags"] == ["ml", "todo"]  # normalized + de-duplicated
+
+
+def test_note_for_missing_project_is_404(client) -> None:
+    resp = client.post(
+        "/api/notes", json={"project_id": "nope", "title": "orphan"}
+    )
+    assert resp.status_code == 404
+
+
+def test_search_filters(client) -> None:
+    a = _make_project(client, "A")
+    b = _make_project(client, "B")
+    client.post(
+        "/api/notes",
+        json={"project_id": a, "title": "Alpha", "body": "kittens", "tags": ["cats"]},
+    )
+    client.post(
+        "/api/notes",
+        json={"project_id": a, "title": "Beta", "body": "puppies", "tags": ["dogs"]},
+    )
+    client.post(
+        "/api/notes", json={"project_id": b, "title": "Gamma", "tags": ["cats"]}
+    )
+
+    by_project = client.get("/api/notes", params={"project_id": a}).json()
+    assert {n["title"] for n in by_project} == {"Alpha", "Beta"}
+
+    by_tag = client.get("/api/notes", params={"tag": "cats"}).json()
+    assert {n["title"] for n in by_tag} == {"Alpha", "Gamma"}
+
+    by_query = client.get("/api/notes", params={"q": "puppies"}).json()
+    assert {n["title"] for n in by_query} == {"Beta"}
+
+    combined = client.get(
+        "/api/notes", params={"project_id": a, "tag": "cats"}
+    ).json()
+    assert {n["title"] for n in combined} == {"Alpha"}
 
 
 def test_empty_title_is_rejected(client) -> None:
-    resp = client.post("/api/notes", json={"title": "  "})
+    project_id = _make_project(client, "P")
+    resp = client.post(
+        "/api/notes", json={"project_id": project_id, "title": "  "}
+    )
     assert resp.status_code == 422
 
 

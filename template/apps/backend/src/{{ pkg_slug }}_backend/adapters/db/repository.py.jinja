@@ -1,17 +1,43 @@
-"""SqlNoteRepository implements the core's NoteRepository port.
+"""SQL repositories implementing the core's ports.
 
-It maps between the persistence model (NoteRow) and the domain model (Note).
-The core never sees NoteRow; the database never sees Note.
+They map between persistence models (ProjectRow/NoteRow/NoteTagRow) and the
+domain models (Project/Note). The core never sees a Row; the DB never sees a
+dataclass.
 """
 
 from __future__ import annotations
 
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from {{ pkg_slug }}_core.domain.note import Note
-from {{ pkg_slug }}_core.ports.repository import NoteRepository
+from {{ pkg_slug }}_core.domain.project import Project
+from {{ pkg_slug }}_core.ports.repository import NoteRepository, ProjectRepository
 
-from .models import NoteRow
+from .models import NoteRow, NoteTagRow, ProjectRow
+
+
+class SqlProjectRepository(ProjectRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, project: Project) -> None:
+        self._session.add(
+            ProjectRow(id=project.id, name=project.name, created_at=project.created_at)
+        )
+        self._session.commit()
+
+    def list(self) -> list[Project]:
+        rows = self._session.exec(select(ProjectRow)).all()
+        return [self._to_domain(r) for r in rows]
+
+    def get(self, project_id: str) -> Project | None:
+        row = self._session.get(ProjectRow, project_id)
+        return self._to_domain(row) if row is not None else None
+
+    @staticmethod
+    def _to_domain(row: ProjectRow) -> Project:
+        return Project(id=row.id, name=row.name, created_at=row.created_at)
 
 
 class SqlNoteRepository(NoteRepository):
@@ -22,26 +48,51 @@ class SqlNoteRepository(NoteRepository):
         self._session.add(
             NoteRow(
                 id=note.id,
+                project_id=note.project_id,
                 title=note.title,
                 body=note.body,
                 created_at=note.created_at,
             )
         )
+        for tag in note.tags:
+            self._session.add(NoteTagRow(note_id=note.id, tag=tag))
         self._session.commit()
-
-    def list(self) -> list[Note]:
-        rows = self._session.exec(select(NoteRow)).all()
-        return [self._to_domain(row) for row in rows]
 
     def get(self, note_id: str) -> Note | None:
         row = self._session.get(NoteRow, note_id)
         return self._to_domain(row) if row is not None else None
 
-    @staticmethod
-    def _to_domain(row: NoteRow) -> Note:
+    def list(self, *, project_id=None, tag=None, query=None) -> list[Note]:
+        stmt = select(NoteRow)
+        if project_id is not None:
+            stmt = stmt.where(NoteRow.project_id == project_id)
+        if tag is not None:
+            tagged = select(NoteTagRow.note_id).where(NoteTagRow.tag == tag)
+            stmt = stmt.where(NoteRow.id.in_(tagged))
+        if query is not None:
+            like = f"%{query.lower()}%"
+            by_tag = select(NoteTagRow.note_id).where(
+                func.lower(NoteTagRow.tag).like(like)
+            )
+            stmt = stmt.where(
+                or_(
+                    func.lower(NoteRow.title).like(like),
+                    func.lower(NoteRow.body).like(like),
+                    NoteRow.id.in_(by_tag),
+                )
+            )
+        rows = self._session.exec(stmt).all()
+        return [self._to_domain(r) for r in rows]
+
+    def _to_domain(self, row: NoteRow) -> Note:
+        tags = self._session.exec(
+            select(NoteTagRow.tag).where(NoteTagRow.note_id == row.id)
+        ).all()
         return Note(
             id=row.id,
+            project_id=row.project_id,
             title=row.title,
             body=row.body,
+            tags=tuple(tags),
             created_at=row.created_at,
         )

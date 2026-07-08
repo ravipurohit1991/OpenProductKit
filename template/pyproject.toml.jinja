@@ -38,6 +38,10 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.isort]
 known-first-party = ["{{ pkg_slug }}_core", "{{ pkg_slug }}_backend", "{{ pkg_slug }}_cli"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer relies on function calls in argument defaults for CLI declarations.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["packages", "apps"]

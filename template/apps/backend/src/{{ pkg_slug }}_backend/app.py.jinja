@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 
 from .adapters.db.engine import init_db
 from .api.routes.notes import router as notes_router
+from .api.routes.projects import router as projects_router
 from .settings import settings
 
 _INDEX = """<!doctype html>
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(projects_router)
     app.include_router(notes_router)
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
