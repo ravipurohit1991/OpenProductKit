@@ -32,6 +32,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          # The generated project (not this template root) owns the lockfile,
+          # so there is nothing here to cache — disable it to avoid a warning.
+          enable-cache: false
 
       - uses: pnpm/action-setup@v4
         with:
