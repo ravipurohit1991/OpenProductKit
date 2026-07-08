@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+apps/frontend/dist/
+
+# Local data / secrets
+*.db
+.env
+data/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

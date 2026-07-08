@@ -1,0 +1,10 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    image: {{ project_slug }}-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data

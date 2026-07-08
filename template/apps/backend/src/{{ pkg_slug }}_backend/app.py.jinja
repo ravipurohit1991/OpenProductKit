@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+
+from .adapters.db.engine import init_db
+from .api.routes.notes import router as notes_router
+from .settings import settings
+
+_INDEX = """<!doctype html>
+<html><head><meta charset="utf-8"><title>{{ project_name }}</title>
+<style>body{font-family:system-ui;max-width:640px;margin:4rem auto;line-height:1.6}</style>
+</head><body>
+<h1>{{ project_name }}</h1>
+<p>The API is running. Explore it at <a href="/docs">/docs</a>.</p>
+<p>The rich web UI runs separately: <code>pnpm -C apps/frontend dev</code>.</p>
+</body></html>"""
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="{{ project_name }} API", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.include_router(notes_router)
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def index() -> str:
+        return _INDEX
+
+    @app.get("/api/health", tags=["system"])
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return app
+
+
+app = create_app()

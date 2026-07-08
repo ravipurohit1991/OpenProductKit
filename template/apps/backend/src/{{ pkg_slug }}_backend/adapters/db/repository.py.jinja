@@ -1,0 +1,47 @@
+"""SqlNoteRepository implements the core's NoteRepository port.
+
+It maps between the persistence model (NoteRow) and the domain model (Note).
+The core never sees NoteRow; the database never sees Note.
+"""
+
+from __future__ import annotations
+
+from sqlmodel import Session, select
+
+from {{ pkg_slug }}_core.domain.note import Note
+from {{ pkg_slug }}_core.ports.repository import NoteRepository
+
+from .models import NoteRow
+
+
+class SqlNoteRepository(NoteRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, note: Note) -> None:
+        self._session.add(
+            NoteRow(
+                id=note.id,
+                title=note.title,
+                body=note.body,
+                created_at=note.created_at,
+            )
+        )
+        self._session.commit()
+
+    def list(self) -> list[Note]:
+        rows = self._session.exec(select(NoteRow)).all()
+        return [self._to_domain(row) for row in rows]
+
+    def get(self, note_id: str) -> Note | None:
+        row = self._session.get(NoteRow, note_id)
+        return self._to_domain(row) if row is not None else None
+
+    @staticmethod
+    def _to_domain(row: NoteRow) -> Note:
+        return Note(
+            id=row.id,
+            title=row.title,
+            body=row.body,
+            created_at=row.created_at,
+        )

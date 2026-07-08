@@ -1,0 +1,12 @@
+# Builds the backend as a self-contained image running the FastAPI app.
+FROM ghcr.io/astral-sh/uv:python{{ python_version }}-bookworm-slim
+
+WORKDIR /app
+COPY . .
+
+# Install the workspace (backend + core) without dev dependencies.
+RUN uv sync --no-dev
+
+ENV APP_DATABASE_URL=sqlite:////app/data/app.db
+EXPOSE 8000
+CMD ["uv", "run", "python", "-m", "{{ pkg_slug }}_backend"]
