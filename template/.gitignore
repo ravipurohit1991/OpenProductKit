@@ -15,6 +15,9 @@ apps/frontend/dist/
 .env
 data/
 
+# Generated build artifact (the typed client in src/client is committed; this is transient)
+/openapi.json
+
 # OS / editors
 .DS_Store
 Thumbs.db

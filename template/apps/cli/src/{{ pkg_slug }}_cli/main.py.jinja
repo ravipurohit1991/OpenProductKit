@@ -96,6 +96,29 @@ def lint() -> None:
     raise typer.Exit(subprocess.call(["uv", "run", "ruff", "check", "."]))
 
 
+@app.command()
+def openapi(output: str = typer.Option("openapi.json", "--output", "-o")) -> None:
+    """Export the backend OpenAPI schema to a JSON file."""
+    import json
+
+    from {{ pkg_slug }}_backend.app import app as backend_app
+
+    schema = backend_app.openapi()
+    with open(output, "w", encoding="utf-8") as fh:
+        json.dump(schema, fh, indent=2)
+    typer.echo(f"Wrote {output}")
+
+
+@app.command()
+def gen() -> None:
+    """Regenerate the typed frontend client from the backend OpenAPI schema."""
+    openapi(output="openapi.json")
+    code = subprocess.call(["pnpm", "-C", "apps/frontend", "gen:client"])
+    if code == 0:
+        typer.echo("Client regenerated at apps/frontend/src/client/schema.d.ts")
+    raise typer.Exit(code)
+
+
 # --- projects -----------------------------------------------------------------
 
 

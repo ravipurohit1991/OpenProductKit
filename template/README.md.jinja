@@ -49,6 +49,20 @@ pnpm install
 pnpm -C apps/frontend dev     # http://127.0.0.1:5173 (proxies /api to the backend)
 ```
 
+## Typed API client (generated)
+
+The web UI never hand-writes API types. `apps/frontend/src/client/schema.d.ts`
+is generated from the backend's OpenAPI schema; `openapi-fetch` makes every
+request path, parameter, body and response type-safe. Regenerate after changing
+the API:
+
+```bash
+uv run {{ cli_name }} gen            # dump OpenAPI + regenerate src/client/schema.d.ts
+```
+
+Change an endpoint and forget to update a call site, and the TypeScript build
+fails — drift is caught by the compiler.
+
 ## Test & lint
 
 ```bash
