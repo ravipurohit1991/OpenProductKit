@@ -1,5 +1,10 @@
 # OpenProductKit
 
+[![CI](https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml/badge.svg)](https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org)
+[![Template: Copier](https://img.shields.io/badge/template-copier-1e90ff.svg)](https://copier.readthedocs.io)
+
 > A white-label **product-template** for shipping commercial apps across web, CLI (and soon desktop) from **one decoupled core** — with plugins, licensing hooks, generated clients, docs, tests and CI built in.
 
 This is a *product-template operating system*: clone it, answer a few questions, and get a runnable, rebrandable, extensible app whose business logic lives in a single framework-free core and whose web/CLI/desktop surfaces are thin adapters around it.
