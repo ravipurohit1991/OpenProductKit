@@ -1,62 +1,46 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
-import {
-  createNote,
-  createProject,
-  getNotes,
-  getProjects,
-  type Note,
-  type Project,
-} from "./api";
 import { APP_NAME } from "./config";
+import {
+  useCreateNote,
+  useCreateProject,
+  useNotes,
+  useProjects,
+} from "./client/hooks";
 
 export function App() {
-  const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Note[]>([]);
   const [query, setQuery] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
   const [newProject, setNewProject] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
   const [noteTags, setNoteTags] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const refreshProjects = useCallback(async () => {
-    const list = await getProjects();
-    setProjects(list);
-    setSelected((cur) => cur ?? list[0]?.id ?? null);
-  }, []);
+  const projects = useProjects();
+  const notes = useNotes({ project_id: selected ?? undefined, q: query || undefined });
+  const createProject = useCreateProject();
+  const createNote = useCreateNote();
 
-  const refreshNotes = useCallback(async () => {
-    if (!selected) {
-      setNotes([]);
-      return;
+  // Default to the first project once projects load.
+  useEffect(() => {
+    if (selected === null && projects.data && projects.data.length > 0) {
+      setSelected(projects.data[0].id);
     }
-    setNotes(await getNotes({ projectId: selected, q: query }));
-  }, [selected, query]);
-
-  useEffect(() => {
-    refreshProjects().catch((e) => setError(String(e)));
-  }, [refreshProjects]);
-
-  useEffect(() => {
-    refreshNotes().catch((e) => setError(String(e)));
-  }, [refreshNotes]);
+  }, [projects.data, selected]);
 
   async function addProject(e: FormEvent) {
     e.preventDefault();
     if (!newProject.trim()) return;
-    const p = await createProject(newProject.trim());
+    const created = await createProject.mutateAsync(newProject.trim());
     setNewProject("");
-    setSelected(p.id);
-    await refreshProjects();
+    setSelected(created.id);
   }
 
   async function addNote(e: FormEvent) {
     e.preventDefault();
     if (!selected || !noteTitle.trim()) return;
     try {
-      await createNote({
+      await createNote.mutateAsync({
         project_id: selected,
         title: noteTitle.trim(),
         tags: noteTags
@@ -67,7 +51,6 @@ export function App() {
       setNoteTitle("");
       setNoteTags("");
       setError(null);
-      await refreshNotes();
     } catch (err) {
       setError(String(err));
     }
@@ -77,7 +60,8 @@ export function App() {
     <main style={{ fontFamily: "system-ui", maxWidth: 900, margin: "2.5rem auto", padding: "0 1rem" }}>
       <h1>{APP_NAME}</h1>
       <p style={{ color: "#666" }}>
-        Resource Vault demo — projects, notes, tags and search, all flowing through one core.
+        Resource Vault demo — projects, notes, tags and search, over a typed client
+        generated from the backend OpenAPI schema.
       </p>
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
@@ -86,7 +70,7 @@ export function App() {
         <section>
           <h2 style={{ fontSize: "1rem" }}>Projects</h2>
           <ul style={{ listStyle: "none", padding: 0 }}>
-            {projects.map((p) => (
+            {(projects.data ?? []).map((p) => (
               <li key={p.id}>
                 <button
                   onClick={() => setSelected(p.id)}
@@ -106,7 +90,7 @@ export function App() {
                 </button>
               </li>
             ))}
-            {projects.length === 0 && <li style={{ color: "#999" }}>No projects yet.</li>}
+            {projects.data?.length === 0 && <li style={{ color: "#999" }}>No projects yet.</li>}
           </ul>
           <form onSubmit={addProject} style={{ display: "flex", gap: 4 }}>
             <input
@@ -131,7 +115,7 @@ export function App() {
           </div>
 
           <ul style={{ listStyle: "none", padding: 0 }}>
-            {notes.map((n) => (
+            {(notes.data ?? []).map((n) => (
               <li key={n.id} style={{ borderBottom: "1px solid #eee", padding: "0.6rem 0" }}>
                 <strong>{n.title}</strong>
                 {n.tags.length > 0 && (
@@ -148,7 +132,7 @@ export function App() {
                 )}
               </li>
             ))}
-            {selected && notes.length === 0 && <li style={{ color: "#999" }}>No matching notes.</li>}
+            {selected && notes.data?.length === 0 && <li style={{ color: "#999" }}>No matching notes.</li>}
             {!selected && <li style={{ color: "#999" }}>Create or select a project.</li>}
           </ul>
 
