@@ -1,0 +1,69 @@
+name: CI
+
+# CI for the *template* itself: generate a project from the template and run its
+# full suite on Linux and Windows. This is the guarantee that `copier copy`
+# always produces a working, lint-clean, buildable project.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-and-test:
+    name: generate & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate a project from the template
+        run: uvx copier copy --defaults --trust --vcs-ref HEAD . "${{ runner.temp }}/gen"
+
+      - name: Backend — install workspace
+        working-directory: ${{ runner.temp }}/gen
+        run: uv sync --dev
+
+      - name: Backend — lint (ruff)
+        working-directory: ${{ runner.temp }}/gen
+        run: uv run ruff check .
+
+      - name: Backend — test (pytest, runs Alembic migrations)
+        working-directory: ${{ runner.temp }}/gen
+        run: uv run pytest
+
+      - name: Frontend — install
+        working-directory: ${{ runner.temp }}/gen
+        run: pnpm install
+
+      - name: Frontend — typecheck (against generated typed client)
+        working-directory: ${{ runner.temp }}/gen
+        run: pnpm -C apps/frontend typecheck
+
+      - name: Frontend — build
+        working-directory: ${{ runner.temp }}/gen
+        run: pnpm -C apps/frontend build
