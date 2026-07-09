@@ -39,9 +39,12 @@ pnpm install && pnpm -C apps/frontend dev   # rich web UI on http://127.0.0.1:51
 
 ```
 packages/core        Pure Python. Domain models + Repository "ports". No FastAPI, no DB, no HTTP.
+packages/plugin-api  Extension SDK: the Plugin contract + entry-point registry. No runtime deps.
+packages/licensing   Entitlement abstraction (dev stub today; real providers later).
 apps/backend         FastAPI HTTP adapter. Owns SQLModel persistence (implements the core ports).
 apps/cli             Typer CLI + task runner. Another adapter around the same core.
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
+extensions/          Example plugins: basic (route), cli (command), paid (license-gated).
 ```
 
 The rule that keeps this template straight forward: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
@@ -52,7 +55,7 @@ The rule that keeps this template straight forward: **business logic never leaks
 - [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
 - [x] **P3** Generated typed client (OpenAPI → openapi-typescript + openapi-fetch + TanStack Query hooks)
 - [x] **P4** CLI as framework / control plane (Alembic migrations, `db`/`build` groups, `info`/`fmt`/`version`)
-- [ ] **P5** Extension manager (dev-time Python plugins)
+- [x] **P5** Extension manager (dev-time Python entry-point plugins: SDK, registry, license gating, backend + CLI + admin UI, 3 example plugins)
 - [ ] **P6** Rebranding via Copier + docs site
 
 Deferred to v1.1: desktop (Tauri, in-process core), real licensing providers, runtime plugin loading.

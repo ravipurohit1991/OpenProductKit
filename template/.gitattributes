@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repo and on checkout, so generated files
+# (e.g. the typed client) don't churn between Windows and Linux.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

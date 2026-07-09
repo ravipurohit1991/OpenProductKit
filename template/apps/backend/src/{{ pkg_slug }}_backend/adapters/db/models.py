@@ -31,3 +31,12 @@ class NoteTagRow(SQLModel, table=True):
 
     note_id: str = Field(foreign_key="notes.id", primary_key=True)
     tag: str = Field(primary_key=True, index=True)
+
+
+class PluginStateRow(SQLModel, table=True):
+    """Persisted enable/disable state for a discovered plugin."""
+
+    __tablename__ = "plugin_states"
+
+    plugin_id: str = Field(primary_key=True)
+    enabled: bool = Field(default=True)

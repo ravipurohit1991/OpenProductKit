@@ -7,18 +7,28 @@ dependencies = [
     "{{ pkg_slug }}-core",
     "{{ pkg_slug }}-backend",
     "{{ pkg_slug }}-cli",
+    # Example plugins — installed so they are discovered via entry points.
+    # Remove these three lines to ship without the bundled examples.
+    "{{ pkg_slug }}-plugin-basic",
+    "{{ pkg_slug }}-plugin-cli",
+    "{{ pkg_slug }}-plugin-paid",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "apps/backend", "apps/cli"]
+members = ["packages/*", "apps/backend", "apps/cli", "extensions/*"]
 
 [tool.uv.sources]
 "{{ pkg_slug }}-core" = { workspace = true }
 "{{ pkg_slug }}-backend" = { workspace = true }
 "{{ pkg_slug }}-cli" = { workspace = true }
+"{{ pkg_slug }}-plugin-api" = { workspace = true }
+"{{ pkg_slug }}-licensing" = { workspace = true }
+"{{ pkg_slug }}-plugin-basic" = { workspace = true }
+"{{ pkg_slug }}-plugin-cli" = { workspace = true }
+"{{ pkg_slug }}-plugin-paid" = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -36,7 +46,16 @@ src = ["packages", "apps"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["{{ pkg_slug }}_core", "{{ pkg_slug }}_backend", "{{ pkg_slug }}_cli"]
+known-first-party = [
+    "{{ pkg_slug }}_core",
+    "{{ pkg_slug }}_backend",
+    "{{ pkg_slug }}_cli",
+    "{{ pkg_slug }}_plugin_api",
+    "{{ pkg_slug }}_licensing",
+    "{{ pkg_slug }}_plugin_basic",
+    "{{ pkg_slug }}_plugin_cli",
+    "{{ pkg_slug }}_plugin_paid",
+]
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer relies on function calls in argument defaults for CLI declarations.

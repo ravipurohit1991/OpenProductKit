@@ -7,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from .api.routes.notes import router as notes_router
+from .api.routes.plugins import router as plugins_router
 from .api.routes.projects import router as projects_router
 from .db import upgrade_head
+from .plugins import mount_plugin_routers
 from .settings import settings
 
 _INDEX = """<!doctype html>
@@ -39,6 +41,9 @@ def create_app() -> FastAPI:
     )
     app.include_router(projects_router)
     app.include_router(notes_router)
+    app.include_router(plugins_router)
+    # Mount routes contributed by installed, licensed plugins.
+    mount_plugin_routers(app)
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def index() -> str:

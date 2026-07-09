@@ -5,6 +5,8 @@ description = "FastAPI HTTP adapter around the core."
 requires-python = ">={{ python_version }}"
 dependencies = [
     "{{ pkg_slug }}-core",
+    "{{ pkg_slug }}-plugin-api",
+    "{{ pkg_slug }}-licensing",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "sqlmodel>=0.0.22",
@@ -14,6 +16,8 @@ dependencies = [
 
 [tool.uv.sources]
 "{{ pkg_slug }}-core" = { workspace = true }
+"{{ pkg_slug }}-plugin-api" = { workspace = true }
+"{{ pkg_slug }}-licensing" = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

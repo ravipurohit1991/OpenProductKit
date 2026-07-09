@@ -6,6 +6,8 @@ requires-python = ">={{ python_version }}"
 dependencies = [
     "{{ pkg_slug }}-core",
     "{{ pkg_slug }}-backend",
+    "{{ pkg_slug }}-plugin-api",
+    "{{ pkg_slug }}-licensing",
     "typer>=0.12",
 ]
 
@@ -15,6 +17,8 @@ dependencies = [
 [tool.uv.sources]
 "{{ pkg_slug }}-core" = { workspace = true }
 "{{ pkg_slug }}-backend" = { workspace = true }
+"{{ pkg_slug }}-plugin-api" = { workspace = true }
+"{{ pkg_slug }}-licensing" = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
