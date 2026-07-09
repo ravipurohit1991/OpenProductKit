@@ -17,6 +17,8 @@ site/
 *.db
 .env
 data/
+license.key
+license-signing.private
 
 # Generated build artifact (the typed client in src/client is committed; this is transient)
 /openapi.json

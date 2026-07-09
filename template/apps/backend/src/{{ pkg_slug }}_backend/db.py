@@ -3,11 +3,13 @@
 Migrations are the single source of truth for the database schema (no more
 `create_all`). The app applies them automatically on startup, and the CLI
 exposes them via `opk db …`. Paths are resolved relative to this package so
-they work for editable installs (dev) and the source-copied Docker image.
+they work for editable installs (dev) and the source-copied Docker image; in a
+frozen desktop build (PyInstaller) they resolve into the bundled data files.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from alembic import command
@@ -15,7 +17,12 @@ from alembic.config import Config
 
 from .settings import settings
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]  # apps/backend
+if getattr(sys, "frozen", False):
+    # PyInstaller bundle: `opk build desktop` ships alembic.ini + migrations
+    # under an `alembic/` data directory next to the frozen modules.
+    _BACKEND_ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "alembic"
+else:
+    _BACKEND_ROOT = Path(__file__).resolve().parents[2]  # apps/backend
 _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
 _MIGRATIONS = _BACKEND_ROOT / "migrations"
 

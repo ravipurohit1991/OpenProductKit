@@ -1,0 +1,25 @@
+[project]
+name = "{{ pkg_slug }}-desktop"
+version = "0.1.0"
+description = "Desktop shell: a native window over the same core, called in-process (no HTTP sidecar)."
+requires-python = ">={{ python_version }}"
+dependencies = [
+    "{{ pkg_slug }}-backend",
+    # In-process ASGI client (starlette TestClient) used as the bridge transport.
+    "httpx>=0.27",
+    "platformdirs>=4",
+    "pywebview>=5.1",
+]
+
+[project.scripts]
+{{ project_slug }}-desktop = "{{ pkg_slug }}_desktop.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ pkg_slug }}_desktop"]
+
+[tool.uv.sources]
+"{{ pkg_slug }}-backend" = { workspace = true }

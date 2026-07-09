@@ -1,0 +1,39 @@
+"""Read-only license status for the UI (plan badge, admin panel, lock cards)."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from {{ pkg_slug }}_licensing import PLAN_RANK
+
+from ... import licensing
+
+router = APIRouter(prefix="/api/license", tags=["license"])
+
+
+class LicenseOut(BaseModel):
+    plan: str
+    licensee: str
+    features: list[str]
+    expires_at: str | None
+    valid: bool
+    source: str
+    message: str
+    #: Plan rank map so clients can compare plans without hardcoding tiers.
+    plans: dict[str, int]
+
+
+@router.get("", response_model=LicenseOut)
+def license_status() -> LicenseOut:
+    info = licensing.get_license_provider().info()
+    return LicenseOut(
+        plan=info.plan if info.valid else "free",
+        licensee=info.licensee,
+        features=list(info.features),
+        expires_at=info.expires_at.isoformat() if info.expires_at else None,
+        valid=info.valid,
+        source=info.source,
+        message=info.message,
+        plans=PLAN_RANK,
+    )

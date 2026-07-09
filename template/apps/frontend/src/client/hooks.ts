@@ -99,6 +99,45 @@ export function usePlugins() {
   });
 }
 
+// --- license -----------------------------------------------------------------
+
+export type LicenseStatus = components["schemas"]["LicenseOut"];
+
+export function useLicense() {
+  return useQuery({
+    queryKey: ["license"],
+    queryFn: async () => {
+      const { data, error } = await client.GET("/api/license");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
+// Compare the licensed plan against a required plan using the server-provided
+// rank map, so no tier ordering is hardcoded client-side. While the license is
+// still loading, features report as not entitled (locked-by-default).
+export function useEntitlement(requiredPlan?: string | null) {
+  const license = useLicense();
+  const data = license.data;
+  const plan = data && data.valid ? data.plan : "free";
+  const entitled = requiredPlan
+    ? data != null &&
+      (data.plans[plan] ?? 0) >= (data.plans[requiredPlan] ?? Number.POSITIVE_INFINITY)
+    : true;
+  return { entitled, plan, isLoading: license.isLoading, license: data };
+}
+
+export function useExportVault() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await client.GET("/api/export");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
 export function useSetPluginEnabled() {
   const qc = useQueryClient();
   return useMutation({

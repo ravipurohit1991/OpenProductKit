@@ -1,0 +1,182 @@
+import json
+import threading
+from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+from {{ pkg_slug }}_licensing import (
+    HttpLicenseProvider,
+    LocalDevLicenseProvider,
+    SignedLicenseProvider,
+    generate_keypair,
+    issue_token,
+    plan_satisfies,
+    resolve_provider,
+    verify_token,
+)
+
+
+def test_plan_ranks() -> None:
+    assert plan_satisfies("pro", None)
+    assert plan_satisfies("pro", "free")
+    assert plan_satisfies("pro", "pro")
+    assert not plan_satisfies("pro", "enterprise")
+    assert not plan_satisfies("unknown-plan", "pro")
+    # A typo in a gate locks rather than silently unlocking.
+    assert not plan_satisfies("enterprise", "entreprise")
+
+
+def test_sign_verify_roundtrip() -> None:
+    keys = generate_keypair()
+    token = issue_token(
+        keys.private_key,
+        licensee="Acme Corp",
+        plan="pro",
+        features=["export", "reports"],
+        valid_days=30,
+    )
+    info = verify_token(token, keys.public_key)
+    assert info.valid
+    assert info.plan == "pro"
+    assert info.licensee == "Acme Corp"
+    assert info.features == ("export", "reports")
+    assert info.expires_at is not None
+
+
+def test_tampered_token_is_invalid() -> None:
+    keys = generate_keypair()
+    token = issue_token(keys.private_key, licensee="Acme", plan="free")
+    # Flip a character inside the payload segment.
+    head, payload, sig = token.split(".")
+    tampered = f"{head}.{payload[:-2]}AA.{sig}"
+    info = verify_token(tampered, keys.public_key)
+    assert not info.valid
+    assert info.plan == "free"
+
+
+def test_wrong_public_key_is_invalid() -> None:
+    keys, other = generate_keypair(), generate_keypair()
+    token = issue_token(keys.private_key, licensee="Acme", plan="enterprise")
+    assert not verify_token(token, other.public_key).valid
+
+
+def test_expired_token_degrades_to_free() -> None:
+    keys = generate_keypair()
+    token = issue_token(
+        keys.private_key,
+        licensee="Acme",
+        plan="pro",
+        expires_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    info = verify_token(token, keys.public_key)
+    assert not info.valid
+    assert info.plan == "free"
+    assert "expired" in info.message
+
+
+def test_malformed_tokens_never_raise() -> None:
+    keys = generate_keypair()
+    for bad in ("", "garbage", "LIC1.only-two", "LIC1.!!.!!", "NOPE.a.b"):
+        info = verify_token(bad, keys.public_key)
+        assert not info.valid
+
+
+def test_signed_provider_from_file(tmp_path: Path) -> None:
+    keys = generate_keypair()
+    token = issue_token(keys.private_key, licensee="Acme", plan="pro", features=["export"])
+    license_file = tmp_path / "license.key"
+    license_file.write_text(token, encoding="utf-8")
+
+    provider = SignedLicenseProvider(keys.public_key, token_file=license_file)
+    assert provider.current_plan() == "pro"
+    assert provider.is_entitled("pro")
+    assert not provider.is_entitled("enterprise")
+    assert provider.has_feature("export")
+    assert not provider.has_feature("reports")
+    assert provider.info().source == "file"
+
+    # A rewritten license file takes effect without restart.
+    license_file.write_text(
+        issue_token(keys.private_key, licensee="Acme", plan="enterprise"), encoding="utf-8"
+    )
+    assert provider.is_entitled("enterprise")
+
+
+def test_missing_file_degrades_to_free(tmp_path: Path) -> None:
+    provider = SignedLicenseProvider("whatever", token_file=tmp_path / "nope.key")
+    assert provider.current_plan() == "free"
+    assert not provider.info().valid
+
+
+def test_resolve_provider_precedence(tmp_path: Path) -> None:
+    keys = generate_keypair()
+    token = issue_token(keys.private_key, licensee="Acme", plan="pro")
+
+    dev = resolve_provider(dev_plan="enterprise")
+    assert isinstance(dev, LocalDevLicenseProvider)
+    assert dev.current_plan() == "enterprise"
+
+    by_token = resolve_provider(public_key=keys.public_key, token=token)
+    assert by_token.info().source == "token"
+    assert by_token.current_plan() == "pro"
+
+    license_file = tmp_path / "license.key"
+    license_file.write_text(token, encoding="utf-8")
+    by_file = resolve_provider(public_key=keys.public_key, token_file=license_file)
+    assert by_file.info().source == "file"
+
+    # An absent file falls back to the dev stub.
+    fallback = resolve_provider(public_key=keys.public_key, token_file=tmp_path / "nope")
+    assert isinstance(fallback, LocalDevLicenseProvider)
+
+
+def test_dev_stub_grants_all_features() -> None:
+    provider = LocalDevLicenseProvider("free")
+    assert provider.has_feature("anything")
+    assert provider.info().source == "dev"
+
+
+def test_http_provider_contract_and_offline_grace() -> None:
+    body = json.dumps(
+        {
+            "valid": True,
+            "plan": "pro",
+            "licensee": "Acme Corp",
+            "features": ["export"],
+            "expires_at": None,
+            "message": "ok",
+        }
+    ).encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/validate"
+    try:
+        provider = HttpLicenseProvider(url, "customer-key", cache_ttl=0.0)
+        assert provider.current_plan() == "pro"
+        assert provider.has_feature("export")
+        assert provider.info().licensee == "Acme Corp"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    # Server gone: the last good response keeps working (offline grace) ...
+    assert provider.current_plan() == "pro"
+    assert "last known" in provider.info().message
+    # ... but a fresh install that never validated is not entitled.
+    fresh = HttpLicenseProvider(url, "customer-key", cache_ttl=0.0)
+    assert fresh.current_plan() == "free"
+    assert not fresh.info().valid

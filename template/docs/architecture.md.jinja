@@ -8,10 +8,12 @@ flowchart LR
     be["apps/backend<br/>FastAPI + SQLModel"]
     cli["apps/cli<br/>{{ cli_name }}"]
     fe["apps/frontend<br/>React + typed client"]
+    dt["apps/desktop<br/>pywebview shell"]
 
     cli --> core
     be --> core
     fe -->|HTTP| be
+    dt -->|in-process bridge| be
 ```
 
 | Layer | Responsibility |
@@ -20,6 +22,8 @@ flowchart LR
 | `apps/backend` | FastAPI adapter; owns SQLModel persistence + Alembic migrations. |
 | `apps/cli` | Typer CLI (`{{ cli_name }}`) — another adapter and the task runner. |
 | `apps/frontend` | React web UI over a client generated from the OpenAPI schema. |
+| `apps/desktop` | Native window over the same UI; API calls dispatched in-process (no HTTP). |
+| `packages/licensing` | Entitlement: dev stub, signed offline tokens, file/HTTP providers. |
 | `packages/plugin-api`, `extensions/` | The plugin SDK and example plugins. |
 
 To extend the app, prefer a **plugin** (see `extensions/`) over editing the core.

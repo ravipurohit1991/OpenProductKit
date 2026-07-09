@@ -125,6 +125,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/license": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** License Status */
+        get: operations["license_status_api_license_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Vault */
+        get: operations["export_vault_api_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ext/basic/ping": {
         parameters: {
             query?: never;
@@ -180,10 +214,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ExportOut */
+        ExportOut: {
+            /** Generated At */
+            generated_at: string;
+            /** Projects */
+            projects: components["schemas"]["ProjectOut"][];
+            /** Notes */
+            notes: components["schemas"]["NoteOut"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** LicenseOut */
+        LicenseOut: {
+            /** Plan */
+            plan: string;
+            /** Licensee */
+            licensee: string;
+            /** Features */
+            features: string[];
+            /** Expires At */
+            expires_at: string | null;
+            /** Valid */
+            valid: boolean;
+            /** Source */
+            source: string;
+            /** Message */
+            message: string;
+            /** Plans */
+            plans: {
+                [key: string]: number;
+            };
         };
         /** NoteIn */
         NoteIn: {
@@ -538,6 +602,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    license_status_api_license_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LicenseOut"];
+                };
+            };
+        };
+    };
+    export_vault_api_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportOut"];
                 };
             };
         };

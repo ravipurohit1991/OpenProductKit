@@ -2,7 +2,7 @@
 
 > {{ project_description }}
 
-This project was generated from [OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit) — a white-label product-template built around one decoupled core with thin web / CLI adapters.
+This project was generated from [OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit) — a white-label product-template built around one decoupled core with thin web / CLI / desktop adapters.
 
 ## Run it
 
@@ -10,6 +10,9 @@ This project was generated from [OpenProductKit](https://github.com/ravipurohit1
 uv sync --dev
 uv run {{ cli_name }} dev              # API on http://127.0.0.1:8000
 pnpm install && pnpm -C apps/frontend dev
+
+# desktop app (same core, no HTTP server):
+uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
 ```
 
 ## Serve these docs

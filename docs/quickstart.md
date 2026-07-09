@@ -27,15 +27,21 @@ uv run opk dev                # API + a basic page on http://127.0.0.1:8000
 # rich web UI, separate terminal:
 pnpm install
 pnpm -C apps/frontend dev     # http://127.0.0.1:5173
+
+# or the desktop app — same core, no HTTP server:
+uv run opk build web
+uv run opk desktop
 ```
 
 ## What you get on day one
 
 - A decoupled core with a small **Resource Vault** demo (projects, notes, tags, search)
 - A FastAPI backend with **Alembic migrations** applied automatically
-- A **Typer CLI** (`opk`) that runs the app, migrations, builds and plugins
+- A **Typer CLI** (`opk`) that runs the app, migrations, builds, plugins and licensing
 - A React web UI over a **generated typed client**
+- A **desktop app** (native window, core called in-process — no sidecar) with `opk build desktop` packaging
 - A **plugin system** with three example plugins and an admin UI
+- **Real licensing**: signed offline tokens, vendor keygen/issue tooling, route gates, a lock-card UI
 - **CI** (Linux + Windows), tests, ruff, and Docker Compose
 
 See the [CLI reference](cli.md) for the full `opk` command surface.

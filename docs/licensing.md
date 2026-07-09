@@ -1,6 +1,6 @@
 # Licensing
 
-Licensing is an **abstraction**, not hardcoded DRM.
+Licensing is an **abstraction with real providers**, not hardcoded DRM.
 
 !!! warning "Honest positioning"
     Desktop and client software can never have perfect license protection. This
@@ -13,25 +13,105 @@ Licensing is an **abstraction**, not hardcoded DRM.
 class LicenseProvider(Protocol):
     def current_plan(self) -> str: ...
     def is_entitled(self, required_plan: str | None) -> bool: ...
+    def has_feature(self, feature: str) -> bool: ...
+    def info(self) -> LicenseInfo: ...   # plan, licensee, expiry, features, source
 ```
 
-For open-source use it behaves as feature flags. For commercial use, a real provider (signed token, HTTP license server, Stripe / Lemon Squeezy / Paddle / Gumroad) replaces the stub.
+Plans are ranked (`free < pro < enterprise`); features are explicit named grants
+in the license. Every adapter — API, CLI, desktop — resolves the **same**
+provider from the same settings, so an install is licensed once, everywhere.
 
-## The dev stub
+## The providers
 
-`LocalDevLicenseProvider` resolves a plan locally (default `pro`) and does a real rank check:
+| Provider | Source of truth | Use case |
+| --- | --- | --- |
+| `LocalDevLicenseProvider` | Local config (`APP_LICENSE_DEV_PLAN`) | Development, open-source "feature flags" mode |
+| `SignedLicenseProvider` | An **Ed25519-signed offline token** (env var or file) | Selling licenses with no server at all |
+| `HttpLicenseProvider` | A vendor-run validation endpoint | Central control, revocation, seat counting |
 
+Resolution order: `APP_LICENSE_URL` → `APP_LICENSE_TOKEN` → `APP_LICENSE_FILE`
+(default `license.key`) → the dev stub. Invalid or expired licenses **degrade to
+the free plan** with a human-readable message — they never crash the app.
+
+## Selling licenses in three commands (no server)
+
+You are the vendor. Once:
+
+```bash
+opk license keygen        # writes license-signing.private / .public
+# bake the public key into the app: APP_LICENSE_PUBLIC_KEY=<printed value>
 ```
-free  <  pro  <  enterprise
+
+Per customer:
+
+```bash
+opk license issue --licensee "Acme Corp" --plan pro --days 365 --feature export
+# -> LIC1.eyJ...  (send this token to the customer)
 ```
 
-So a plugin that declares `required_plan="pro"` is entitled under the dev stub, while one requiring `enterprise` would be locked — the seam a real backend plugs into.
+The customer activates it:
 
-## Where it plugs in
+```bash
+opk license install LIC1.eyJ...   # writes license.key
+opk license status                # plan: pro, licensee: Acme Corp, ...
+```
 
-- **Plugins** — the registry marks a plugin `entitled` based on `required_plan`; unlicensed plugin routes are never mounted.
-- **Future (P7)** — a `@requires_feature(...)` backend decorator and `useEntitlement()` / `LockedFeatureCard` on the frontend.
+The token is a signed JSON payload (`licensee`, `plan`, `features`,
+`expires_at`). The app verifies it **offline** with only your public key;
+tampering or the wrong key degrades it to `free`. Expiry is checked on every
+read, so it takes effect without a restart — as does replacing the license file.
 
-## Roadmap
+## The HTTP contract
 
-Real providers — `FileLicenseProvider`, `HttpLicenseProvider`, `SignedTokenLicenseProvider` — and the feature-gate decorator land in a later phase. The interface is stable today so you can build against it.
+`HttpLicenseProvider` POSTs `{"token": "..."}` to your endpoint and expects:
+
+```json
+{"valid": true, "plan": "pro", "licensee": "Acme Corp",
+ "features": ["export"], "expires_at": null, "message": "ok"}
+```
+
+Responses are cached (default 5 min). If your server is unreachable, the **last
+good response keeps working** (offline grace) instead of locking paying
+customers out; a fresh install that has never validated stays `free`. Implement
+the endpoint in anything — including a few lines of FastAPI in your own
+license-server project, or a webhook layer over Stripe / Lemon Squeezy / Paddle.
+
+## Gating things
+
+**Plugins** declare `required_plan` in their manifest; unlicensed plugin routes
+are never mounted and their CLI commands never attach.
+
+**Backend routes** use FastAPI dependencies (the idiomatic decorator form):
+
+```python
+from .licensing import require_feature, require_plan
+
+@router.get("/export", dependencies=[Depends(require_plan("pro"))])
+def export(): ...
+
+@router.get("/report", dependencies=[Depends(require_feature("reports"))])
+def report(): ...
+```
+
+A failed gate returns `403` with a structured detail
+(`{"error": "license_required", "required_plan": "pro", "current_plan": "free"}`).
+
+**Frontend** components use the entitlement hook and lock card:
+
+```tsx
+const { entitled } = useEntitlement("pro");
+return entitled
+  ? <ExportButton />
+  : <LockedFeatureCard title="Export vault" requiredPlan="pro" />;
+```
+
+Plan ranks come from the `/api/license` response, so the client never hardcodes
+tiers. The demo app gates its **Export vault** feature exactly this way — run
+with `APP_LICENSE_DEV_PLAN=free` to see the locked state.
+
+## Where the pieces live
+
+- `packages/licensing` — providers, token signing/verification, `LicenseInfo`
+- `apps/backend/src/…/licensing.py` — resolved provider + `require_plan` / `require_feature`
+- `GET /api/license` — status for the UI (License tab in the admin)
+- `opk license …` — status/install (customer) and keygen/issue/verify (vendor)

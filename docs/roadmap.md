@@ -9,11 +9,15 @@
 - [x] **P5** Extension manager — dev-time plugins, registry, license gating, admin UI, 3 examples
 - [x] **P6** Rebranding & docs — Copier prompts + `copier update`, this docs site, comparisons
 
-## v1.1 (planned)
+## v1.1 (shipped)
 
-- **Desktop** — Tauri shell calling the core **in-process** (no HTTP sidecar); signing/notarization documented.
-- **Real licensing providers** — file / HTTP / signed-token, plus a `@requires_feature` decorator and frontend `useEntitlement()` / `LockedFeatureCard`.
-- **Runtime plugin loading** — installing and enabling plugins without a rebuild, with sandboxing/permissions.
+- [x] **Real licensing** — Ed25519 signed offline tokens, file + HTTP providers, vendor tooling (`opk license keygen|issue`), `require_plan` / `require_feature` route gates, frontend `useEntitlement()` / `LockedFeatureCard`, a License admin tab and a gated demo feature.
+- [x] **Desktop** — pywebview shell calling the core **in-process** over a JS bridge (no HTTP sidecar, no port), per-user app-data storage, `opk build desktop` (PyInstaller); signing/notarization documented, not solved.
+
+## Next
+
+- **Runtime plugin loading** — installing and enabling plugins without a rebuild, with sandboxing/permissions; bundling plugins into frozen desktop builds.
+- **Generated-client drift gate in CI** — deferred while `openapi-typescript` output can format-drift across minor versions.
 
 ## Explicitly out of scope for v1
 

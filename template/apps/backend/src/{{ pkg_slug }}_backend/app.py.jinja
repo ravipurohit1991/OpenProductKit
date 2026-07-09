@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from .api.routes.export import router as export_router
+from .api.routes.license import router as license_router
 from .api.routes.notes import router as notes_router
 from .api.routes.plugins import router as plugins_router
 from .api.routes.projects import router as projects_router
@@ -42,6 +44,8 @@ def create_app() -> FastAPI:
     app.include_router(projects_router)
     app.include_router(notes_router)
     app.include_router(plugins_router)
+    app.include_router(license_router)
+    app.include_router(export_router)
     # Mount routes contributed by installed, licensed plugins.
     mount_plugin_routers(app)
 

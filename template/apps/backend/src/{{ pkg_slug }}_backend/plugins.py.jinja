@@ -14,13 +14,11 @@ from functools import lru_cache
 from fastapi import Depends, FastAPI, HTTPException
 from sqlmodel import Session
 
-from {{ pkg_slug }}_licensing import LocalDevLicenseProvider
 from {{ pkg_slug }}_plugin_api import ENTRYPOINT_GROUP, Plugin, PluginRegistry, discover
 
 from .adapters.db.plugin_state import get_enabled_map
 from .api.deps import SessionDep
-
-license_provider = LocalDevLicenseProvider()
+from .licensing import get_license_provider
 
 
 @lru_cache
@@ -30,6 +28,7 @@ def discovered_plugins() -> tuple[Plugin, ...]:
 
 def build_registry(session: Session) -> PluginRegistry:
     enabled = get_enabled_map(session)
+    license_provider = get_license_provider()
     return PluginRegistry(
         discovered_plugins(),
         is_enabled=lambda plugin_id: enabled.get(plugin_id, True),  # enabled by default
@@ -46,6 +45,7 @@ def _require_enabled(plugin_id: str):
 
 
 def mount_plugin_routers(app: FastAPI) -> None:
+    license_provider = get_license_provider()
     for plugin in discovered_plugins():
         router = plugin.backend_router()
         manifest = plugin.manifest
