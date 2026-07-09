@@ -1,97 +1,160 @@
 # OpenProductKit
 
-[![CI](https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml/badge.svg)](https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org)
-[![Template: Copier](https://img.shields.io/badge/template-copier-1e90ff.svg)](https://copier.readthedocs.io)
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="OpenProductKit logo" width="96" height="96">
+</p>
 
-> A white-label **product-template** for shipping commercial apps across web, CLI and desktop from **one decoupled core** — with plugins, real licensing, generated clients, docs, tests and CI built in.
+<p align="center">
+  <strong>A white-label product template for shipping commercial apps across web, CLI and desktop from one decoupled core.</strong>
+</p>
 
-This is a *product-template operating system*: clone it, answer a few questions, and get a runnable, rebrandable, extensible app whose business logic lives in a single framework-free core and whose web/CLI/desktop surfaces are thin adapters around it.
+<p align="center">
+  <a href="https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/docs.yml"><img alt="Docs" src="https://github.com/ravipurohit1991/OpenProductKit/actions/workflows/docs.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow.svg"></a>
+  <a href="https://www.python.org"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-blue.svg"></a>
+  <a href="https://copier.readthedocs.io"><img alt="Template: Copier" src="https://img.shields.io/badge/template-copier-1e90ff.svg"></a>
+</p>
 
-The repository is a [**Copier**](https://copier.readthedocs.io) template. You generate a fresh project from it, and later pull upstream template improvements with `copier update`.
+OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives you a runnable, rebrandable, extensible product repository. Generate it, answer a few questions, and start from a working app with plugins, licensing, generated clients, docs, tests and CI already wired in.
 
-**The intended journey:**
+The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
 
-1. **Generate** — `copier copy`, answer a few questions; every package, import and window title carries *your* name.
-2. **Run** — a working product on day one: web, CLI and desktop over one core, with licensing, plugins, migrations, typed client, tests and CI.
-3. **Rework** — replace the small fenced demo domain with your product, layer by layer, following [the recipe](docs/replace-the-demo.md). Or don't do it by hand: every generated project ships an **`AGENTS.md`** (pre-rendered with your project's names) so you can point Claude Code, Cursor or any coding agent at it and say *"replace the demo with \<my idea\>"*.
-4. **Ship** — the packaging, licensing and update story is already built.
-
-**Proof it works:** [Tally](https://github.com/ravipurohit1991/tally-time-tracker), a freelancer time tracker, was generated from this template and reworked by an AI agent following `AGENTS.md` — the first commit is the pristine template output, every commit after is one layer of the rework. [The blog post](docs/blog/introducing-openproductkit.md) walks through it.
-
-📖 **Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) · [architecture](docs/architecture.md) · [make it yours](docs/replace-the-demo.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
+**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [licensing](docs/licensing.md) | [roadmap](docs/roadmap.md)
 
 ---
+
+## Why OpenProductKit?
+
+Most templates get you a web app or a desktop shell. OpenProductKit is meant for product builders who need the same core product to show up in more than one place.
+
+- **One core, many adapters:** pure Python domain logic with FastAPI, Typer, React and desktop surfaces around it.
+- **Desktop without a sidecar:** the web UI runs in a native window and calls the app in-process, with no hidden HTTP server or port race.
+- **Commercial hooks included:** signed offline license tokens, file/HTTP providers, vendor commands and route/UI gates.
+- **Plugin-ready:** Python entry-point plugins can add backend routes, CLI commands, settings, health checks and admin UI.
+- **Generated typed client:** frontend API types come from the backend OpenAPI schema.
+- **Agent-ready rework path:** the demo domain is fenced with `[demo]` markers, and generated projects include `AGENTS.md` and `CLAUDE.md`.
 
 ## Quickstart
 
 ```bash
-# 1. Generate a project (Copier is run through uv — no global install needed)
+# Generate a product from GitHub.
 uvx copier copy gh:ravipurohit1991/OpenProductKit my-product
-#   or, from a local clone:
+
+# Or generate from a local clone.
 uvx copier copy . ../my-product
 
 cd my-product
 
-# 2. Install the Python workspace (uv provisions the right Python for you)
+# Install the Python workspace.
 uv sync --dev
 
-# 3. Smoke test
+# Smoke test the generated CLI.
 uv run opk hello
 uv run opk doctor
 
-# 4. Run it
-uv run opk dev                      # API + web page on http://127.0.0.1:8000
-pnpm install && pnpm -C apps/frontend dev   # rich web UI on http://127.0.0.1:5173
+# Run the backend.
+uv run opk dev
 
-# 5. Or as a desktop app (same core, no HTTP server)
-uv run opk build web && uv run opk desktop
+# Run the rich web UI in another terminal.
+pnpm install
+pnpm -C apps/frontend dev
+```
 
-# 6. Make it your product: the demo is fenced — this lists everything to replace
+The backend starts on `http://127.0.0.1:8000`; the Vite frontend starts on `http://127.0.0.1:5173`.
+
+To run the desktop app:
+
+```bash
+uv run opk build web
+uv run opk desktop
+```
+
+If you changed `cli_name` during generation, replace `opk` with your generated command name.
+
+## What You Get
+
+| Area | Included |
+| --- | --- |
+| Core | Framework-free Python domain package with models, ports, services and tests |
+| Backend | FastAPI, SQLModel persistence, Alembic migrations and OpenAPI |
+| CLI | Typer command surface for dev, DB, builds, docs, plugins and licensing |
+| Frontend | React + Vite UI over generated TypeScript API types |
+| Desktop | pywebview shell using the same frontend and an in-process app bridge |
+| Licensing | Dev stub, signed offline tokens, file provider, HTTP provider and feature gates |
+| Plugins | Entry-point plugin SDK with backend, CLI, settings, health and license support |
+| Docs | MkDocs Material site with GitHub Pages and Read the Docs config |
+| CI | Linux and Windows checks for backend, frontend and generated project behavior |
+
+## Architecture
+
+```text
+packages/core        Pure Python. Domain models + repository ports. No FastAPI, DB or HTTP.
+packages/plugin-api  Extension SDK: Plugin contract + entry-point registry.
+packages/licensing   Entitlement: dev stub, signed offline tokens, file/HTTP providers.
+apps/backend         FastAPI adapter. Owns SQLModel persistence and Alembic migrations.
+apps/cli             Typer CLI and project control plane.
+apps/frontend        React + Vite UI over a generated OpenAPI client.
+apps/desktop         pywebview shell: same UI, same app, one process.
+extensions/          Example plugins: basic, CLI and paid/license-gated.
+```
+
+The rule that keeps the template portable:
+
+> Business logic never leaks into FastAPI, Typer or React. Those are delivery mechanisms.
+
+## Make It Your Product
+
+The generated Resource Vault demo is a worked example, not the product. It exists so you can see how one small domain flows through every layer.
+
+Every demo line is marked:
+
+```bash
 grep -rn "\[demo\]" packages apps
-#    …or hand the job to your AI agent: it reads AGENTS.md and knows the recipe.
 ```
 
-## Architecture — one core, many adapters
+Replace that demo with your product layer by layer using the [Make it yours](docs/replace-the-demo.md) recipe. You can also hand the job to a coding agent: generated projects include an `AGENTS.md` rendered with your project names and the replacement rules.
 
+## Proof It Works
+
+[Tally](https://github.com/ravipurohit1991/tally-time-tracker), a freelancer time tracker, was generated from this template and reworked by an AI agent following `AGENTS.md`.
+
+Its history is intentionally readable: first commit is pristine template output; later commits replace the demo one layer at a time. The [introductory blog post](docs/blog/introducing-openproductkit.md) walks through the approach.
+
+## Roadmap Snapshot
+
+OpenProductKit and generated packages are currently versioned as **0.1.0**. A `v1.0` tag will come after the surface has proven stable in real projects.
+
+Shipped:
+
+- Hexagonal core, FastAPI backend, Typer CLI, React UI and CI
+- Resource Vault demo through core, backend, CLI, web and desktop
+- Generated OpenAPI TypeScript client
+- Plugin manager and three example plugins
+- Signed offline licensing and HTTP license provider
+- pywebview desktop shell with in-process app calls
+- Agent-ready rework path with `[demo]` markers and generated agent instructions
+- MkDocs Material docs site
+
+Next:
+
+- Runtime plugin loading with sandboxing and permissions
+- Frozen desktop plugin packaging
+- Generated-client drift gate in CI
+
+See the [roadmap](docs/roadmap.md) for details.
+
+## Documentation
+
+Build or preview the docs locally:
+
+```bash
+uvx --with-requirements requirements-docs.txt mkdocs serve
+uvx --with-requirements requirements-docs.txt mkdocs build --strict
 ```
-packages/core        Pure Python. Domain models + Repository "ports". No FastAPI, no DB, no HTTP.
-packages/plugin-api  Extension SDK: the Plugin contract + entry-point registry. No runtime deps.
-packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/HTTP providers.
-apps/backend         FastAPI HTTP adapter. Owns SQLModel persistence (implements the core ports).
-apps/cli             Typer CLI + task runner. Another adapter around the same core.
-apps/frontend        React + Vite web UI. Talks to the backend over HTTP — or the desktop bridge.
-apps/desktop         pywebview shell: the same UI + core in ONE process. No sidecar, no port.
-extensions/          Example plugins: basic (route), cli (command), paid (license-gated).
-```
 
-The rule that keeps this template straight forward: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
-
-## What's here today
-
-> **Version note:** the template and every generated package are at **0.1.0**. A `v1.0` will be tagged only once the surface has proven stable in real projects — the milestones below track scope, not release versions.
-
-**Milestone 1 — foundation (shipped)**
-
-- [x] **P1** Shippable skeleton: hexagonal `core`, FastAPI backend, Typer CLI, React web UI, CI, one-command dev
-- [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
-- [x] **P3** Generated typed client (OpenAPI → openapi-typescript + openapi-fetch + TanStack Query hooks)
-- [x] **P4** CLI as framework / control plane (Alembic migrations, `db`/`build` groups, `info`/`fmt`/`version`)
-- [x] **P5** Extension manager (dev-time Python entry-point plugins: SDK, registry, license gating, backend + CLI + admin UI, 3 example plugins)
-- [x] **P6** Rebranding via Copier (`copier update`) + MkDocs docs site, comparisons, SECURITY/CONTRIBUTING
-
-**Milestone 2 — licensing & desktop (shipped)**
-
-- [x] **P7** Real licensing: Ed25519 signed offline tokens, file/HTTP providers, vendor tooling (`opk license keygen|issue`), route gates (`require_plan`/`require_feature`), `useEntitlement()` + `LockedFeatureCard`, License admin tab, gated demo feature
-- [x] **P8** Desktop: pywebview shell calling the core **in-process** over a JS bridge (no HTTP sidecar, no port), per-user app data, `opk build desktop` (PyInstaller onedir). Code signing: documented, not solved
-
-**Milestone 3 — agent-ready (shipped)**
-
-- [x] **P9** Agent-ready rework path: every demo line fenced with a grep-able `[demo]` marker, a [replace-the-demo recipe](docs/replace-the-demo.md), and an `AGENTS.md` + `CLAUDE.md` in every generated project — pre-rendered with your project's names — so AI coding agents can do the rework
-
-Next: runtime plugin loading (install/enable without rebuild, sandboxing) — see the [roadmap](docs/roadmap.md).
+The published site is available at [ravipurohit1991.github.io/OpenProductKit](https://ravipurohit1991.github.io/OpenProductKit/).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
