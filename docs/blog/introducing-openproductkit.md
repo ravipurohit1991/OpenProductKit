@@ -1,85 +1,138 @@
-# A product template your AI agent can finish
+# A product template your AI agent can finish — proven, commit by commit
 
-*Introducing OpenProductKit — a white-label, full-stack template for shipping commercial apps across web, CLI and desktop from one decoupled core. Generate it, point your coding agent at it, ship your product.*
+*OpenProductKit is a white-label, full-stack template for shipping commercial apps across web, CLI and desktop from one decoupled core. To prove the pitch, an AI coding agent generated a project from it and reworked it into [**Tally**](https://github.com/ravipurohit1991/tally-time-tracker), a real freelancer time tracker — following nothing but the project's own `AGENTS.md`. This post walks through that build. The repo's git history is the tutorial.*
 
 ---
 
 ## The gap between a boilerplate and a product
 
-Every developer has a folder full of app ideas. Most of them die in the same place: not at the idea, not even at the core feature — at the *product* part. The licensing. The desktop packaging. The plugin story. The typed API client that drifts out of sync. The migrations. The "how do I even rebrand this template without a find-and-replace massacre" problem.
+Every developer has a folder full of app ideas. Most die in the same place: not at the idea — at the *product* part. The licensing. The desktop packaging. The typed API client that drifts out of sync. The migrations. The "how do I rebrand this template without a find-and-replace massacre" problem.
 
-Boilerplates solve day one. Almost none of them solve week four, when you need to sell a license key, ship a Windows build, or pull upstream template fixes into a project you've heavily customized.
+Boilerplates solve day one. Almost none solve week four, when you need to sell a license key, ship a Windows build, or pull upstream template fixes into a project you've heavily customized.
 
-And in 2026 there's a new question no classic boilerplate answers: **what does your AI coding agent do with it?** You're probably not going to hand-write the CRUD anymore. You'll generate a project, open Claude Code or Cursor, and say "build my idea into this." Most templates give the agent nothing to work with: no rules, no map, no recipe — so it guesses, and the architecture erodes from the first commit.
+And in 2026 there's a question no classic boilerplate answers: **what does your AI coding agent do with it?** You're probably not hand-writing the CRUD anymore. You generate a project, open Claude Code or Cursor, and say "build my idea into this." Most templates give the agent nothing: no rules, no map, no recipe — so it guesses, and the architecture erodes from the first commit.
 
-[**OpenProductKit**](https://github.com/ravipurohit1991/OpenProductKit) is my attempt to close both gaps.
+[**OpenProductKit**](https://github.com/ravipurohit1991/OpenProductKit) closes both gaps. Instead of just claiming that, let me show you.
 
-## What you get on day one
+## What you start from
 
-OpenProductKit is a [Copier](https://copier.readthedocs.io) template. You run one command, answer a few questions (product name, package slug, CLI name), and get a monorepo where *everything* — Python packages, imports, the CLI entrypoint, the desktop window title, Docker image names — carries your branding:
+OpenProductKit is a [Copier](https://copier.readthedocs.io) template. One command, a few questions (product name, package slug, CLI name), and you get a monorepo where everything carries your branding:
 
-```bash
-uvx copier copy gh:ravipurohit1991/OpenProductKit my-product
-cd my-product && uv sync --dev
-uv run mycli dev        # working API
-uv run mycli desktop    # the same app in a native window
-```
+- **One decoupled core** — `packages/core` is pure Python: dataclasses, ports, services. Zero third-party dependencies. FastAPI, Typer and React are thin adapters around it.
+- **A desktop app with no HTTP server** — the same React UI in a native window, calling the core *in-process* over a JS bridge. No sidecar, no port, nothing extra to sign.
+- **Real licensing** — Ed25519-signed offline tokens, vendor tooling (`keygen`/`issue`), route gates, a lock-card UI component.
+- **A plugin system** with license-gated plugins, a **generated typed client** (API drift = compile error), **Alembic migrations**, tests, ruff, CI, docs.
+- **`AGENTS.md` + `CLAUDE.md`** in every generated project — rendered with *your* actual package and CLI names: the architecture rule, the layer map, the command palette, and the recipe for replacing the demo domain.
 
-Inside:
+The template ships a deliberately boring demo domain (a notes-and-tags "Resource Vault") threaded through every layer, and **every demo line is fenced with a grep-able `[demo]` marker**. It exists to be deleted.
 
-- **One decoupled core.** `packages/core` is pure Python — dataclasses, ports (Protocols), services. Zero third-party dependencies. FastAPI, Typer and React are thin adapters around it.
-- **A desktop app with no HTTP server.** The same React UI in a pywebview window, dispatching API calls to the core *in-process* over a JS bridge. No sidecar process, no port, nothing extra to sign. This is only possible because the core never assumed HTTP existed.
-- **Real licensing.** Ed25519-signed offline license tokens, vendor tooling (`mycli license keygen|issue`), route gates (`require_plan("pro")`), and a lock-card UI component. You can sell a license key on day one.
-- **A plugin system.** Python entry-point plugins that contribute backend routes, CLI commands and admin UI — with license gating, so plugins can be paid features.
-- **A generated typed client.** The frontend never hand-writes API types; they're generated from the OpenAPI schema. Change an endpoint and forget a call site, and the TypeScript build fails. Drift is a compile error.
-- **The boring essentials.** Alembic migrations (applied automatically in dev), pytest across the workspace, ruff, CI on Linux + Windows, a CLI that doubles as the task runner, and an MkDocs site.
+## The proof: building Tally
 
-And because the repo *is* a Copier template, `copier update` later pulls upstream improvements into your generated project as a reviewable three-way merge. Rebranding isn't a script that mangles your files — it's the generation step itself.
+Tally is a local-first time tracker for freelancers: clients with hourly rates, one running timer at a time, weekly billable reports, CSV export as a paid feature. Web UI, CLI and desktop app — same core, same data.
 
-## The demo is designed to be deleted
+Here's the thing: **an AI coding agent built it, and its only instructions about the codebase came from the generated `AGENTS.md`.** Every step below links to the actual commit.
 
-The template ships with a deliberately boring demo domain — a "Resource Vault" of projects, notes and tags — threaded through every layer: domain model → port → service → SQL repository → migration → API route → generated client → React view → CLI command. It's not the product; it's the worked example that shows you how one domain flows through the whole system.
-
-Here's the part I think most templates get wrong: they either ship *no* example (an empty skeleton teaches nothing) or an example so entangled you can't tell scaffold from framework.
-
-In OpenProductKit, **every demo line is fenced**:
+### Step 0 — generate ([`dc9247c`](https://github.com/ravipurohit1991/tally-time-tracker/commit/dc9247c))
 
 ```bash
-grep -rn "\[demo\]" packages apps
+uvx copier copy gh:ravipurohit1991/OpenProductKit tally
+# project_name=Tally, cli_name=tally, pkg_slug=tally
 ```
 
-That one command prints the complete inventory of what to replace. Everything unmarked — licensing, plugins, desktop shell, migrations tooling, the client pipeline — is framework and works unchanged with *any* domain. The docs include a [step-by-step recipe](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/replace-the-demo.md) for swapping the demo for your own entities, strangler-style: build yours next to it, keep the tests green, delete the demo last.
+The first commit is the pristine template output — no hand edits. It already runs: 37 passing tests, a working web UI, CLI, desktop shell, licensing and plugins. That's the floor you start from, and it makes the rest of the history an honest diff: everything after this commit is the rework.
 
-## The part built for your AI agent
+### Step 1 — the agent reads AGENTS.md
 
-Every generated project ships an **`AGENTS.md`** (plus a `CLAUDE.md` pointer) — and because it's rendered by the template engine, it's written in terms of *your* project: your actual package names, your CLI command, your paths. Not generic advice. It contains:
+The generated `AGENTS.md` opens with the one rule:
 
-- **The one rule** — business logic never leaves the core. Adapters stay thin.
-- **The layer map** — what each package is, what's framework, what's demo.
-- **The command palette** — how to run, test, lint, migrate, regenerate the client.
-- **The recipe** — the exact 12-step, inside-out order for adding a domain entity end-to-end and deleting the demo.
-- **The gotchas** — "your frontend type error is a stale generated client, run `mycli gen`", and friends.
+> **Business logic never leaves `packages/core`.** FastAPI, Typer, React and pywebview are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service.
 
-So the intended workflow for a new product is genuinely this:
+…then gives the agent a 12-step, inside-out recipe for adding a domain. The agent followed it literally, strangler-style: build Tally *next to* the demo, keep tests green, delete the demo last.
+
+### Step 2 — the core domain ([`9062d14`](https://github.com/ravipurohit1991/tally-time-tracker/commit/9062d14))
+
+`Client` and `TimeEntry` as frozen dataclasses; a `TimerService` that owns the product's central rule — **at most one entry runs at a time** — and a `ReportService` that turns completed entries into billable totals. 18 tests against in-memory fakes: no database, no HTTP, sub-second feedback. This is where the hexagonal split earns its keep — the most important logic in the product was written and tested before any framework got involved.
+
+### Step 3 — persistence and API ([`fcc3cb6`](https://github.com/ravipurohit1991/tally-time-tracker/commit/fcc3cb6))
+
+SQLModel rows, repositories implementing the core's ports, and a migration the agent didn't write by hand:
+
+```bash
+uv run tally db revision -m "add clients and time entries"   # Alembic autogen, reviewed
+uv run tally db migrate
+```
+
+Thin routes over the services — and the paid feature is one line:
+
+```python
+@router.get("/export", dependencies=[Depends(require_plan("pro"))])
+def export_report_csv(...) -> Response:   # CSV of billable hours
+```
+
+Tests cover the gate both ways: the dev license stub grants `pro` (200); monkeypatching a `free` plan returns a structured 403.
+
+### Step 4 — the frontend ([`e12c6ec`](https://github.com/ravipurohit1991/tally-time-tracker/commit/e12c6ec))
+
+```bash
+uv run tally gen   # regenerate the typed client from the new OpenAPI schema
+```
+
+Every hook derives its types from the generated schema — `components["schemas"]["EntryOut"]` — so a backend change that misses a call site fails the TypeScript build. A `TimerView` with a live elapsed clock, a `ReportView` with the billable table and a **CSV export button that renders as a lock card on the free plan** (`useEntitlement("pro")` + `<LockedFeatureCard/>`).
+
+### Step 5 — the CLI ([`042707d`](https://github.com/ravipurohit1991/tally-time-tracker/commit/042707d))
+
+The CLI is a first-class adapter over the same core, so this is the actual product experience:
+
+```text
+$ tally client add "Acme Corp" --rate 100
+$ tally start "acme corp" "api integration"
+Timer started for Acme Corp.  api integration
+$ tally status
+Running: Acme Corp  0:03  api integration
+$ tally stop
+Stopped: Acme Corp  0:09
+$ tally report --week
+Client                      Hours     Rate     Amount
+Acme Corp                    0.00   100.00       0.25
+TOTAL                        0.00                0.25
+```
+
+One-running-timer is enforced here too — same `TimerService`, so the CLI and the web UI *can't* disagree.
+
+### Step 6 — delete the demo ([`d776fec`](https://github.com/ravipurohit1991/tally-time-tracker/commit/d776fec))
+
+```bash
+grep -rn "\[demo\]" packages apps   # the complete checklist
+```
+
+Pure-demo files deleted, marked sections trimmed from the mixed files, the initial migration rewritten to Tally's schema (the recipe's pre-release path), the typed client regenerated. After the purge: **45 tests, zero `[demo]` markers, and not one line of dead scaffold.** Even the license-gated example plugin got reworked to summarize clients and entries instead of notes.
+
+### The desktop app — zero changes
+
+This deserves its own headline: **the desktop app required no work at all.** The pywebview shell dispatches any route over its in-process bridge, so `tally desktop` just… shows Tally, timer and lock cards included. `tally build desktop` packages it with PyInstaller. That's not luck — it's what "the core never assumed HTTP" buys you.
+
+## What dogfooding caught
+
+Full honesty: the first CI run of the generated project failed. The generated workflow file is copied verbatim (it can't be a Jinja template — GitHub Actions' own `${{ }}` syntax would collide), and its desktop smoke-test step shipped a literal, unrendered `{{ pkg_slug }}_desktop`. Tally was the first generated project to run its own CI, it caught the bug within 19 seconds, and the fix landed upstream the same day ([`8b3dea8`](https://github.com/ravipurohit1991/tally-time-tracker/commit/8b3dea8) in Tally). Building a real product from your own template is the only review that finds this class of bug — which is rather the point of this whole exercise.
+
+## Do this with your idea
+
+The workflow Tally validated is three steps:
 
 ```text
 1. uvx copier copy gh:ravipurohit1991/OpenProductKit my-product
-2. Open the project with your coding agent, and say:
-   "Read AGENTS.md, then replace the demo domain with <your idea>."
-3. Review the diff. Ship.
+2. Open it with your coding agent:
+   "Read AGENTS.md, then replace the demo with <your idea>."
+3. Review the diffs, commit layer by layer, ship.
 ```
 
-The agent doesn't guess the architecture — it's told. It doesn't hunt for the demo — it greps the fence. It doesn't break the client — the recipe says when to regenerate. The hexagonal split that makes the codebase pleasant for humans turns out to be exactly what makes it *legible to a machine*: small layers, one rule, a repeatable pattern per entity.
-
-## Why hexagonal, in one paragraph
-
-"Ports and adapters" sounds like architecture-astronaut talk until you see the payoff: the desktop app. Because the core never imported FastAPI, the desktop shell can call it in the same process — no bundled server, no port conflicts, no second binary to sign. The same discipline is why the CLI is a first-class adapter, why core tests run with zero infrastructure, and why your agent can add an entity by following a template instead of spelunking. The constraint is the feature.
+The agent doesn't guess the architecture — it's told. It doesn't hunt for the demo — it greps the fence. It doesn't break the client — the recipe says when to regenerate. And you review commits shaped like the ones above, not a 5,000-line blob. Prefer to do it by hand? The same recipe is written for humans in the docs as [Make it yours](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/replace-the-demo.md).
 
 ## What it isn't
 
-Honesty section. OpenProductKit is deliberately opinionated and deliberately lean: one database (SQLite/SQLModel + Alembic), one frontend (React + Vite), one desktop approach (pywebview + PyInstaller). No Electron, no multiple payment providers, no Kubernetes charts. Runtime plugin installation (add plugins without a rebuild) is on the [roadmap](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/roadmap.md); code signing is documented but not solved for you. If you need a multi-tenant SaaS starter with Stripe wired in, the [comparisons docs](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/comparisons/vs-saas-boilerplates.md) point you at better fits.
+OpenProductKit is deliberately lean and opinionated: one database (SQLite/SQLModel + Alembic), one frontend (React + Vite), one desktop approach (pywebview + PyInstaller). No Electron, no payment providers, no Kubernetes. Runtime plugin installation is on the [roadmap](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/roadmap.md); code signing is documented, not solved. If you need a multi-tenant SaaS starter with Stripe, the [comparisons docs](https://github.com/ravipurohit1991/OpenProductKit/blob/main/docs/comparisons/vs-saas-boilerplates.md) will point you somewhere better.
 
-But if your idea is *a product* — something a customer downloads or logs into, with a license key, plugins, and a web + desktop + CLI surface — this is the fastest honest path from `copier copy` to shipped that I know how to build.
+But if your idea is *a product* — something a customer downloads or logs into, with a license key, plugins, and web + CLI + desktop surfaces — this is the fastest honest path from `copier copy` to shipped that I know how to build. And now there's a repo to prove it.
 
 ## Try it
 
@@ -87,8 +140,8 @@ But if your idea is *a product* — something a customer downloads or logs into,
 uvx copier copy gh:ravipurohit1991/OpenProductKit my-product
 ```
 
-- Repo: [github.com/ravipurohit1991/OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit)
-- Start here: the Quickstart, then "Make it yours" in the docs
-- MIT licensed
+- The template: [github.com/ravipurohit1991/OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit)
+- The proof: [github.com/ravipurohit1991/tally-time-tracker](https://github.com/ravipurohit1991/tally-time-tracker) — read it commit by commit
+- MIT licensed, both of them
 
 I'd love to hear what you build — and especially what your agent builds. Issues and PRs welcome.

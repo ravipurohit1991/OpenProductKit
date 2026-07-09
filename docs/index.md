@@ -21,7 +21,7 @@ Most templates stop at "web" or "desktop". OpenProductKit's wedge is **breadth +
 ## Where to next
 
 - **[Quickstart](quickstart.md)** — generate and run a project in a minute.
-- **[Make it yours](replace-the-demo.md)** — replace the demo domain with your product.
+- **[Make it yours](replace-the-demo.md)** — replace the demo domain with your product. See it done for real in [Tally](https://github.com/ravipurohit1991/tally-time-tracker), built from this template by an AI agent, commit by commit.
 - **[Architecture](architecture.md)** — the one-core-many-adapters design.
 - **[Plugins](plugins.md)** — the extension system.
 - **[Licensing](licensing.md)** — sell licenses in three commands.

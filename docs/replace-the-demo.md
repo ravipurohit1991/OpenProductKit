@@ -12,6 +12,13 @@ That is the complete list of code to replace or trim. Everything unmarked — li
 
 Generated projects also ship an **`AGENTS.md`** with a condensed version of this recipe, pre-rendered with your project's actual package and CLI names, so an AI coding agent (Claude Code, Cursor, Codex, …) can do the rework for you. "Generate the project, describe your product to your agent, review the diff" is the intended workflow.
 
+!!! example "A complete worked example"
+    [Tally](https://github.com/ravipurohit1991/tally-time-tracker) — a freelancer
+    time tracker — is this recipe executed for real, by an AI agent following the
+    generated `AGENTS.md`. Its git history is the tutorial: pristine generation,
+    then core → persistence/API → frontend → CLI → demo removal, one commit per
+    layer.
+
 ## What is demo, what is framework
 
 | Area | Demo (replace) | Framework (keep) |
