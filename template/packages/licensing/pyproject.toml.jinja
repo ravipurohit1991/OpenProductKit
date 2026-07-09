@@ -1,9 +1,11 @@
 [project]
 name = "{{ pkg_slug }}-licensing"
 version = "0.1.0"
-description = "Licensing / entitlement abstraction. Ships a dev stub; real providers land in P7."
+description = "Licensing / entitlement: dev stub, Ed25519 signed tokens (offline), file and HTTP providers."
 requires-python = ">={{ python_version }}"
-dependencies = []
+dependencies = [
+    "cryptography>=42",
+]
 
 [build-system]
 requires = ["hatchling"]

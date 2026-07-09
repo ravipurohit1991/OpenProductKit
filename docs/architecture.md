@@ -14,6 +14,7 @@ flowchart TD
         BE[apps/backend<br/>FastAPI + SQLModel]
         CLI[apps/cli<br/>Typer &bull; opk]
         FE[apps/frontend<br/>React + typed client]
+        DT[apps/desktop<br/>pywebview shell]
     end
 
     subgraph ext["Extensions"]
@@ -26,6 +27,7 @@ flowchart TD
     BE -->|implements| P
     CLI -->|uses| S
     FE -->|HTTP| BE
+    DT -->|in-process bridge| BE
     PL -->|entry points| PA
     BE -->|discovers| PA
     BE -->|gates on| LIC
@@ -37,10 +39,11 @@ flowchart TD
 | --- | --- | --- |
 | `packages/core` | Domain models, `Repository` ports, services. No I/O. | nothing |
 | `packages/plugin-api` | The `Plugin` contract + registry. | nothing (runtime) |
-| `packages/licensing` | Entitlement abstraction. | nothing |
+| `packages/licensing` | Entitlement: dev stub, Ed25519 signed tokens, file/HTTP providers. | cryptography |
 | `apps/backend` | FastAPI HTTP adapter; owns SQLModel persistence + Alembic. | core, plugin-api, licensing |
 | `apps/cli` | Typer CLI, task runner and control plane (`opk`). | core, backend, plugin-api, licensing |
-| `apps/frontend` | React + Vite web UI over a generated typed client. | backend (HTTP) |
+| `apps/frontend` | React + Vite web UI over a generated typed client. | backend (HTTP or desktop bridge) |
+| `apps/desktop` | pywebview shell; the same app called in-process (no HTTP). | backend, frontend build |
 | `extensions/*` | Example plugins. | plugin-api (+ backend for the paid one) |
 
 ## Why hexagonal here

@@ -1,10 +1,11 @@
 import { useState } from "react";
 
+import { LicensePanel } from "./LicensePanel";
 import { PluginManager } from "./PluginManager";
 import { VaultView } from "./VaultView";
 import { APP_NAME } from "./config";
 
-type Tab = "vault" | "plugins";
+type Tab = "vault" | "plugins" | "license";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("vault");
@@ -31,9 +32,12 @@ export function App() {
       <nav style={{ display: "flex", gap: 8, margin: "1rem 0 1.5rem" }}>
         {tabButton("vault", "Resource Vault")}
         {tabButton("plugins", "Plugins")}
+        {tabButton("license", "License")}
       </nav>
 
-      {tab === "vault" ? <VaultView /> : <PluginManager />}
+      {tab === "vault" && <VaultView />}
+      {tab === "plugins" && <PluginManager />}
+      {tab === "license" && <LicensePanel />}
     </main>
   );
 }

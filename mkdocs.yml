@@ -33,6 +33,7 @@ nav:
   - CLI reference: cli.md
   - Plugins: plugins.md
   - Licensing: licensing.md
+  - Desktop: desktop.md
   - Rebranding & updates: rebranding.md
   - Comparisons:
       - vs FastAPI full-stack template: comparisons/vs-fastapi-full-stack-template.md

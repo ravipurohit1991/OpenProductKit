@@ -7,14 +7,17 @@ Command groups:
   {{ cli_name }} note …      manage notes (core adapter)
   {{ cli_name }} db …        database migrations (Alembic)
   {{ cli_name }} build …     build artifacts
-plus dev / doctor / info / test / lint / fmt / openapi / gen / version.
+  {{ cli_name }} license …   license status/install + vendor keygen/issue
+plus dev / desktop / doctor / info / test / lint / fmt / openapi / gen / version.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import typer
 from sqlmodel import Session
@@ -26,11 +29,12 @@ from {{ pkg_slug }}_backend.adapters.db.repository import (
     SqlProjectRepository,
 )
 from {{ pkg_slug }}_backend.db import downgrade, make_revision, upgrade_head
+from {{ pkg_slug }}_backend.licensing import get_license_provider
 from {{ pkg_slug }}_backend.plugins import build_registry
 from {{ pkg_slug }}_core.errors import CoreError
 from {{ pkg_slug }}_core.services.notes import NoteService
 from {{ pkg_slug }}_core.services.projects import ProjectService
-from {{ pkg_slug }}_licensing import LocalDevLicenseProvider
+from {{ pkg_slug }}_licensing import LicenseInfo, generate_keypair, issue_token, verify_token
 from {{ pkg_slug }}_plugin_api import ENTRYPOINT_GROUP, discover
 
 app = typer.Typer(
@@ -45,12 +49,16 @@ db_app = typer.Typer(help="Database migrations.", no_args_is_help=True)
 build_app = typer.Typer(help="Build artifacts.", no_args_is_help=True)
 docs_app = typer.Typer(help="Documentation site.", no_args_is_help=True)
 plugin_app = typer.Typer(help="Manage extensions / plugins.", no_args_is_help=True)
+license_app = typer.Typer(
+    help="License status, install and vendor tooling (keygen/issue).", no_args_is_help=True
+)
 app.add_typer(project_app, name="project")
 app.add_typer(note_app, name="note")
 app.add_typer(db_app, name="db")
 app.add_typer(build_app, name="build")
 app.add_typer(docs_app, name="docs")
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(license_app, name="license")
 
 
 def _session() -> Session:
@@ -114,6 +122,18 @@ def dev(port: int = 8000, reload: bool = True) -> None:
         port=port,
         reload=reload,
     )
+
+
+@app.command()
+def desktop(
+    check: bool = typer.Option(
+        False, "--check", help="Boot the in-process API, hit /api/health, exit (no window)."
+    ),
+) -> None:
+    """Run the desktop app: a native window over the same core, in-process."""
+    from {{ pkg_slug }}_desktop.main import run as run_desktop
+
+    raise typer.Exit(run_desktop(check=check))
 
 
 @app.command()
@@ -220,6 +240,55 @@ def db_reset() -> None:
 def build_web() -> None:
     """Build the production web bundle."""
     raise typer.Exit(_run(["pnpm", "-C", "apps/frontend", "build"]))
+
+
+@build_app.command("desktop")
+def build_desktop() -> None:
+    """Package the desktop app (PyInstaller onedir) into ./dist.
+
+    Bundles the web build and the alembic migrations as data files. Code
+    signing / notarization is intentionally out of scope — see the docs.
+    """
+    code = _run(["pnpm", "-C", "apps/frontend", "build"])
+    if code != 0:
+        raise typer.Exit(code)
+    # Absolute paths: --specpath moves the spec into build/, and PyInstaller
+    # resolves relative --add-data paths against the spec, not the cwd.
+    root = Path.cwd()
+    sep = os.pathsep
+    raise typer.Exit(
+        _run(
+            [
+                "uv",
+                "run",
+                "--group",
+                "build",
+                "pyinstaller",
+                "--noconfirm",
+                "--clean",
+                "--windowed",
+                "--name",
+                "{{ project_slug }}",
+                "--specpath",
+                "build",
+                "--add-data",
+                f"{root / 'apps' / 'frontend' / 'dist'}{sep}frontend",
+                "--add-data",
+                f"{root / 'apps' / 'backend' / 'alembic.ini'}{sep}alembic",
+                "--add-data",
+                f"{root / 'apps' / 'backend' / 'migrations'}{sep}alembic/migrations",
+                # migrations/env.py is exec'd at runtime from data files, so
+                # static analysis never sees its stdlib imports.
+                "--hidden-import",
+                "logging.config",
+                "--hidden-import",
+                "logging.handlers",
+                "--collect-all",
+                "webview",
+                str(root / "apps" / "desktop" / "src" / "{{ pkg_slug }}_desktop" / "main.py"),
+            ]
+        )
+    )
 
 
 # --- docs ---------------------------------------------------------------------
@@ -348,8 +417,124 @@ def _toggle_plugin(plugin_id: str, *, enabled: bool) -> None:
     typer.echo(f"{plugin_id} {'enabled' if enabled else 'disabled'}")
 
 
+# --- licensing ----------------------------------------------------------------
+
+
+def _read_if_file(value: str) -> str:
+    """Accept a raw value or a path to a file containing it (trailing newline ok)."""
+    candidate = Path(value)
+    try:
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    return value.strip()
+
+
+def _echo_license(info: LicenseInfo) -> None:
+    typer.echo(f"  plan:     {info.plan if info.valid else 'free'}")
+    typer.echo(f"  valid:    {'yes' if info.valid else 'no'}")
+    typer.echo(f"  licensee: {info.licensee or '-'}")
+    typer.echo(f"  features: {', '.join(info.features) or '-'}")
+    expires = info.expires_at.date().isoformat() if info.expires_at else "never"
+    typer.echo(f"  expires:  {expires}")
+    typer.echo(f"  source:   {info.source}")
+    if info.message:
+        typer.echo(f"  note:     {info.message}")
+
+
+@license_app.command("status")
+def license_status() -> None:
+    """Show the license the app currently resolves (plan, licensee, expiry)."""
+    _echo_license(get_license_provider().info())
+
+
+@license_app.command("install")
+def license_install(token: str = typer.Argument(..., help="Token string or file path.")) -> None:
+    """Install a license token into the app's license file."""
+    from {{ pkg_slug }}_backend.settings import settings
+
+    dest = Path(settings.license_file)
+    dest.write_text(_read_if_file(token) + "\n", encoding="utf-8")
+    typer.echo(f"License written to {dest}.")
+    typer.echo("Check it with: {{ cli_name }} license status")
+
+
+@license_app.command("verify")
+def license_verify(
+    token: str = typer.Argument(..., help="Token string or file path."),
+    public_key: str = typer.Option(
+        "", "--public-key", help="Raw key or file path; defaults to the app's configured key."
+    ),
+) -> None:
+    """Verify a signed token offline and print its contents (exit 1 if invalid)."""
+    from {{ pkg_slug }}_backend.settings import settings
+
+    key = _read_if_file(public_key) if public_key else settings.license_public_key
+    info = verify_token(_read_if_file(token), key)
+    _echo_license(info)
+    if not info.valid:
+        raise typer.Exit(1)
+
+
+# --- licensing: vendor side (you, selling your product) -------------------------
+
+
+@license_app.command("keygen")
+def license_keygen(
+    out_dir: str = typer.Option(".", "--out-dir", help="Where to write the key files."),
+) -> None:
+    """Generate the vendor signing keypair. Run once; keep the private key secret."""
+    out = Path(out_dir)
+    private_path = out / "license-signing.private"
+    public_path = out / "license-signing.public"
+    if private_path.exists():
+        typer.echo(f"Refusing to overwrite existing {private_path}", err=True)
+        raise typer.Exit(1)
+    out.mkdir(parents=True, exist_ok=True)
+    keys = generate_keypair()
+    private_path.write_text(keys.private_key + "\n", encoding="utf-8")
+    public_path.write_text(keys.public_key + "\n", encoding="utf-8")
+    typer.echo(f"Wrote {private_path}  (SECRET - never commit or ship this)")
+    typer.echo(f"Wrote {public_path}")
+    typer.echo("")
+    typer.echo("Bake the public key into the app so it can verify licenses:")
+    typer.echo(f"  APP_LICENSE_PUBLIC_KEY={keys.public_key}")
+
+
+@license_app.command("issue")
+def license_issue(
+    licensee: str = typer.Option(..., "--licensee", help="Customer name or email."),
+    plan: str = typer.Option("pro", "--plan", help="free, pro or enterprise."),
+    days: int = typer.Option(0, "--days", help="Validity in days (0 = perpetual)."),
+    feature: list[str] = typer.Option(None, "--feature", help="Repeatable feature flag."),
+    key_file: str = typer.Option(
+        "license-signing.private", "--key-file", help="Vendor private key from keygen."
+    ),
+    out: str = typer.Option("", "--out", help="Also write the token to this file."),
+) -> None:
+    """Sign a license token for a customer with the vendor private key."""
+    key_path = Path(key_file)
+    if not key_path.is_file():
+        typer.echo(
+            f"Signing key not found: {key_path} (generate one with: license keygen)", err=True
+        )
+        raise typer.Exit(1)
+    token = issue_token(
+        key_path.read_text(encoding="utf-8").strip(),
+        licensee=licensee,
+        plan=plan,
+        features=feature or [],
+        valid_days=days or None,
+    )
+    if out:
+        Path(out).write_text(token + "\n", encoding="utf-8")
+        typer.echo(f"Wrote {out}")
+    typer.echo(token)
+
+
 # Attach CLI commands contributed by installed, licensed plugins.
-_license = LocalDevLicenseProvider()
+_license = get_license_provider()
 for _plugin in discover(ENTRYPOINT_GROUP):
     _plugin_cli = _plugin.cli()
     if _plugin_cli is not None and _license.is_entitled(_plugin.manifest.required_plan):

@@ -60,6 +60,10 @@ jobs:
         working-directory: ${{ runner.temp }}/gen
         run: uv run pytest
 
+      - name: Desktop — smoke test (in-process bridge, headless)
+        working-directory: ${{ runner.temp }}/gen
+        run: uv run python -m openproductkit_desktop --check
+
       - name: Frontend — install
         working-directory: ${{ runner.temp }}/gen
         run: pnpm install

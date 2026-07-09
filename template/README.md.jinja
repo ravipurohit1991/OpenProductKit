@@ -2,17 +2,18 @@
 
 > {{ project_description }}
 
-Generated from [OpenProductKit](https://github.com/youruser/openproductkit) — a white-label product-template built around **one decoupled core** with thin web / CLI adapters.
+Generated from [OpenProductKit](https://github.com/youruser/openproductkit) — a white-label product-template built around **one decoupled core** with thin web / CLI / desktop adapters.
 
 ## Architecture
 
 ```
 packages/core        Pure Python domain models + Repository ports. No FastAPI, no DB, no HTTP.
 packages/plugin-api  Extension SDK: the Plugin contract + registry. No runtime deps.
-packages/licensing   Entitlement abstraction (dev stub; real providers land later).
+packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/HTTP providers.
 apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
 apps/cli             Typer CLI + task runner ({{ cli_name }}).
-apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
+apps/frontend        React + Vite web UI. Talks to the backend over HTTP - or the desktop bridge.
+apps/desktop         pywebview shell: the same UI + core in one process. No sidecar, no port.
 extensions/          Example plugins (basic, cli, paid).
 ```
 
@@ -21,8 +22,8 @@ Business logic lives only in `packages/core`. Everything else is a delivery mech
 ## The demo: a small Resource Vault
 
 Projects group notes; notes carry tags; you can search notes by project, tag or
-free text. The same core services power the web API, the CLI and (later) the
-desktop app.
+free text. The same core services power the web API, the CLI and the desktop
+app.
 
 ```bash
 # via the CLI adapter
@@ -77,6 +78,40 @@ uv run {{ cli_name }} dev           # API + a basic web page on http://127.0.0.1
 pnpm install
 pnpm -C apps/frontend dev     # http://127.0.0.1:5173 (proxies /api to the backend)
 ```
+
+## Desktop app (no HTTP server)
+
+The same UI in a native window; API calls cross a JS bridge into the FastAPI
+app **in the same process** — no sidecar, no port. Data lives in your OS
+app-data directory.
+
+```bash
+uv run {{ cli_name }} build web       # build the UI once (and after UI changes)
+uv run {{ cli_name }} desktop         # native window, dev mode
+uv run {{ cli_name }} desktop --check # headless smoke test
+uv run {{ cli_name }} build desktop   # PyInstaller onedir bundle into ./dist
+```
+
+Code signing / notarization is intentionally left to you (per-vendor
+certificates); expect OS warnings on unsigned builds.
+
+## Licensing
+
+Development uses a stub that grants the `pro` plan (set `APP_LICENSE_DEV_PLAN`
+to try other tiers). For real installs, issue Ed25519-signed offline tokens:
+
+```bash
+uv run {{ cli_name }} license keygen                            # vendor: once; prints APP_LICENSE_PUBLIC_KEY
+uv run {{ cli_name }} license issue --licensee "Acme" --plan pro --days 365   # vendor: per customer
+uv run {{ cli_name }} license install LIC1....                  # customer: activate
+uv run {{ cli_name }} license status                            # inspect the resolved license
+```
+
+Gate a route with `Depends(require_plan("pro"))` or
+`Depends(require_feature("reports"))`; gate UI with `useEntitlement()` and
+`<LockedFeatureCard/>`. See the License tab in the web UI, and the gated
+"Export vault" demo. An HTTP license-server provider is included as well
+(`APP_LICENSE_URL`).
 
 ## Typed API client (generated)
 

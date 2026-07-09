@@ -1,0 +1,60 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from {{ pkg_slug }}_backend import licensing
+from {{ pkg_slug }}_backend.app import app
+from {{ pkg_slug }}_licensing import (
+    LocalDevLicenseProvider,
+    SignedLicenseProvider,
+    generate_keypair,
+    issue_token,
+)
+
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+def test_license_status_shows_dev_stub(client) -> None:
+    body = client.get("/api/license").json()
+    assert body["plan"] == "pro"
+    assert body["source"] == "dev"
+    assert body["valid"] is True
+    assert body["plans"]["free"] < body["plans"]["pro"] < body["plans"]["enterprise"]
+
+
+def test_export_allowed_under_dev_pro(client) -> None:
+    resp = client.get("/api/export")
+    assert resp.status_code == 200
+    assert {"generated_at", "projects", "notes"} <= resp.json().keys()
+
+
+def test_export_locked_on_free_plan(client, monkeypatch) -> None:
+    monkeypatch.setattr(
+        licensing, "get_license_provider", lambda: LocalDevLicenseProvider("free")
+    )
+    resp = client.get("/api/export")
+    assert resp.status_code == 403
+    detail = resp.json()["detail"]
+    assert detail["error"] == "license_required"
+    assert detail["required_plan"] == "pro"
+    assert detail["current_plan"] == "free"
+
+
+def test_license_route_reflects_signed_token(client, monkeypatch) -> None:
+    keys = generate_keypair()
+    token = issue_token(
+        keys.private_key, licensee="Acme Corp", plan="enterprise", features=["export"]
+    )
+    provider = SignedLicenseProvider(keys.public_key, token=token)
+    monkeypatch.setattr(licensing, "get_license_provider", lambda: provider)
+
+    body = client.get("/api/license").json()
+    assert body["plan"] == "enterprise"
+    assert body["licensee"] == "Acme Corp"
+    assert body["features"] == ["export"]
+    assert body["source"] == "token"
+    # An enterprise token also unlocks the pro-gated export.
+    assert client.get("/api/export").status_code == 200

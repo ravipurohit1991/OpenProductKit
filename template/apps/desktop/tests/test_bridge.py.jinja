@@ -1,0 +1,39 @@
+"""The desktop bridge, exercised without a GUI: same dispatch path the window uses."""
+
+import json
+
+from fastapi.testclient import TestClient
+
+from {{ pkg_slug }}_backend.app import app
+from {{ pkg_slug }}_desktop.main import Api
+
+
+def test_bridge_dispatches_to_the_app_in_process() -> None:
+    with TestClient(app, raise_server_exceptions=False) as client:
+        api = Api(client)
+
+        health = api.request({"method": "GET", "path": "/api/health"})
+        assert health["status"] == 200
+        assert json.loads(health["body"]) == {"status": "ok"}
+
+        created = api.request(
+            {"method": "POST", "path": "/api/projects", "body": '{"name": "Desktop"}'}
+        )
+        assert created["status"] == 201
+        project = json.loads(created["body"])
+
+        listed = api.request({"method": "GET", "path": f"/api/notes?project_id={project['id']}"})
+        assert listed["status"] == 200
+        assert json.loads(listed["body"]) == []
+
+        # License status flows over the same bridge (desktop uses the same seam).
+        license_info = api.request({"method": "GET", "path": "/api/license"})
+        assert license_info["status"] == 200
+        assert json.loads(license_info["body"])["plan"] == "pro"
+
+
+def test_bridge_defaults_and_missing_routes() -> None:
+    with TestClient(app, raise_server_exceptions=False) as client:
+        api = Api(client)
+        missing = api.request({"method": "GET", "path": "/api/nope"})
+        assert missing["status"] == 404

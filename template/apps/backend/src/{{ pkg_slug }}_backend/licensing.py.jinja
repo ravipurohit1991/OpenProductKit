@@ -1,0 +1,60 @@
+"""License wiring for the backend: one resolved provider + route gates.
+
+`require_plan` / `require_feature` are FastAPI dependencies (the idiomatic
+"decorator" for routes). A failed gate returns 403 with a structured detail the
+frontend recognizes to render a LockedFeatureCard instead of a generic error:
+
+    @router.get("/report", dependencies=[Depends(require_plan("pro"))])
+    def report(): ...
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from functools import lru_cache
+
+from fastapi import HTTPException
+
+from {{ pkg_slug }}_licensing import LicenseProvider, resolve_provider
+
+from .settings import settings
+
+
+@lru_cache
+def get_license_provider() -> LicenseProvider:
+    return resolve_provider(
+        public_key=settings.license_public_key,
+        token=settings.license_token,
+        token_file=settings.license_file,
+        url=settings.license_url,
+        dev_plan=settings.license_dev_plan,
+    )
+
+
+def _locked(requirement: dict[str, str], current_plan: str) -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={"error": "license_required", "current_plan": current_plan, **requirement},
+    )
+
+
+def require_plan(plan: str) -> Callable[[], None]:
+    """Route dependency: the license's plan rank must satisfy `plan`."""
+
+    def dependency() -> None:
+        provider = get_license_provider()
+        if not provider.is_entitled(plan):
+            raise _locked({"required_plan": plan}, provider.current_plan())
+
+    return dependency
+
+
+def require_feature(feature: str) -> Callable[[], None]:
+    """Route dependency: the license must grant the named feature flag."""
+
+    def dependency() -> None:
+        provider = get_license_provider()
+        if not provider.has_feature(feature):
+            raise _locked({"required_feature": feature}, provider.current_plan())
+
+    return dependency

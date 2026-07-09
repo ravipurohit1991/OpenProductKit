@@ -5,13 +5,13 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org)
 [![Template: Copier](https://img.shields.io/badge/template-copier-1e90ff.svg)](https://copier.readthedocs.io)
 
-> A white-label **product-template** for shipping commercial apps across web, CLI (and soon desktop) from **one decoupled core** — with plugins, licensing hooks, generated clients, docs, tests and CI built in.
+> A white-label **product-template** for shipping commercial apps across web, CLI and desktop from **one decoupled core** — with plugins, real licensing, generated clients, docs, tests and CI built in.
 
 This is a *product-template operating system*: clone it, answer a few questions, and get a runnable, rebrandable, extensible app whose business logic lives in a single framework-free core and whose web/CLI/desktop surfaces are thin adapters around it.
 
 The repository is a [**Copier**](https://copier.readthedocs.io) template. You generate a fresh project from it, and later pull upstream template improvements with `copier update`.
 
-📖 **Docs:** [architecture](docs/architecture.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
+📖 **Docs:** [architecture](docs/architecture.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
 
 ---
 
@@ -35,6 +35,9 @@ uv run opk doctor
 # 4. Run it
 uv run opk dev                      # API + web page on http://127.0.0.1:8000
 pnpm install && pnpm -C apps/frontend dev   # rich web UI on http://127.0.0.1:5173
+
+# 5. Or as a desktop app (same core, no HTTP server)
+uv run opk build web && uv run opk desktop
 ```
 
 ## Architecture — one core, many adapters
@@ -42,16 +45,19 @@ pnpm install && pnpm -C apps/frontend dev   # rich web UI on http://127.0.0.1:51
 ```
 packages/core        Pure Python. Domain models + Repository "ports". No FastAPI, no DB, no HTTP.
 packages/plugin-api  Extension SDK: the Plugin contract + entry-point registry. No runtime deps.
-packages/licensing   Entitlement abstraction (dev stub today; real providers later).
+packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/HTTP providers.
 apps/backend         FastAPI HTTP adapter. Owns SQLModel persistence (implements the core ports).
 apps/cli             Typer CLI + task runner. Another adapter around the same core.
-apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
+apps/frontend        React + Vite web UI. Talks to the backend over HTTP — or the desktop bridge.
+apps/desktop         pywebview shell: the same UI + core in ONE process. No sidecar, no port.
 extensions/          Example plugins: basic (route), cli (command), paid (license-gated).
 ```
 
 The rule that keeps this template straight forward: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
 
-## What's here today (v1 — in progress)
+## What's here today
+
+**v1**
 
 - [x] **P1** Shippable skeleton: hexagonal `core`, FastAPI backend, Typer CLI, React web UI, CI, one-command dev
 - [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
@@ -60,7 +66,12 @@ The rule that keeps this template straight forward: **business logic never leaks
 - [x] **P5** Extension manager (dev-time Python entry-point plugins: SDK, registry, license gating, backend + CLI + admin UI, 3 example plugins)
 - [x] **P6** Rebranding via Copier (`copier update`) + MkDocs docs site, comparisons, SECURITY/CONTRIBUTING
 
-Deferred to v1.1: desktop (Tauri, in-process core), real licensing providers, runtime plugin loading.
+**v1.1**
+
+- [x] **P7** Real licensing: Ed25519 signed offline tokens, file/HTTP providers, vendor tooling (`opk license keygen|issue`), route gates (`require_plan`/`require_feature`), `useEntitlement()` + `LockedFeatureCard`, License admin tab, gated demo feature
+- [x] **P8** Desktop: pywebview shell calling the core **in-process** over a JS bridge (no HTTP sidecar, no port), per-user app data, `opk build desktop` (PyInstaller onedir). Code signing: documented, not solved
+
+Next: runtime plugin loading (install/enable without rebuild, sandboxing) — see the [roadmap](docs/roadmap.md).
 
 ## License
 

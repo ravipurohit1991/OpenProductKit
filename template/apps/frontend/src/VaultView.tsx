@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 
+import { LockedFeatureCard } from "./LockedFeatureCard";
 import {
   useCreateNote,
   useCreateProject,
+  useEntitlement,
+  useExportVault,
   useNotes,
   useProjects,
 } from "./client/hooks";
@@ -19,6 +22,23 @@ export function VaultView() {
   const notes = useNotes({ project_id: selected ?? undefined, q: query || undefined });
   const createProject = useCreateProject();
   const createNote = useCreateNote();
+  const exportEntitlement = useEntitlement("pro");
+  const exportVault = useExportVault();
+
+  async function downloadExport() {
+    try {
+      const data = await exportVault.mutateAsync();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vault-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
 
   useEffect(() => {
     if (selected === null && projects.data && projects.data.length > 0) {
@@ -154,6 +174,23 @@ export function VaultView() {
           )}
         </section>
       </div>
+
+      <section style={{ marginTop: 28 }}>
+        {exportEntitlement.entitled ? (
+          <button
+            onClick={downloadExport}
+            disabled={exportVault.isPending}
+            style={{ padding: "0.5rem 1rem" }}
+          >
+            {exportVault.isPending ? "Exporting…" : "Export vault (JSON)"}
+          </button>
+        ) : (
+          <LockedFeatureCard title="Export vault" requiredPlan="pro">
+            {" "}
+            A license-gated feature: install a license to unlock it.
+          </LockedFeatureCard>
+        )}
+      </section>
     </>
   );
 }
