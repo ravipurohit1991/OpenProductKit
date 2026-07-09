@@ -29,6 +29,7 @@ theme:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
+  - Make it yours: replace-the-demo.md
   - Architecture: architecture.md
   - CLI reference: cli.md
   - Plugins: plugins.md
@@ -40,6 +41,8 @@ nav:
       - vs desktop boilerplates: comparisons/vs-desktop-boilerplates.md
       - vs SaaS boilerplates: comparisons/vs-saas-boilerplates.md
   - Roadmap: roadmap.md
+  - Blog:
+      - A product template your AI agent can finish: blog/introducing-openproductkit.md
 
 markdown_extensions:
   - admonition

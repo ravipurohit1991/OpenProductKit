@@ -12,6 +12,9 @@ from typing import Protocol
 from ..domain.note import Note
 from ..domain.project import Project
 
+# [demo] The ports/ pattern is framework; these two Protocols belong to the
+# Resource Vault sample domain — replace them with your own ports.
+
 
 class ProjectRepository(Protocol):
     def add(self, project: Project) -> None: ...

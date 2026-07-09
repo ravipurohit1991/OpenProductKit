@@ -11,6 +11,10 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
+# [demo] Resource Vault sample schema. Keep the migration chain intact: write a
+# new revision that drops these tables and creates yours, or (pre-release only)
+# rewrite this one — 0002_plugin_states is framework and depends on this id.
+
 revision: str = "0001"
 down_revision: str | None = None
 branch_labels = None

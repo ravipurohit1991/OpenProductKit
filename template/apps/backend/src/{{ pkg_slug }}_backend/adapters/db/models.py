@@ -7,6 +7,9 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+# [demo] ProjectRow/NoteRow/NoteTagRow are the Resource Vault sample tables —
+# replace them with your own. PluginStateRow below is framework: keep it.
+
 
 class ProjectRow(SQLModel, table=True):
     __tablename__ = "projects"

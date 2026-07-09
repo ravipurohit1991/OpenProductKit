@@ -1,5 +1,7 @@
 """Pure domain core: models, ports and services with no I/O dependencies."""
 
+# [demo] Everything re-exported here except CoreError belongs to the Resource
+# Vault sample domain — swap these for your own exports.
 from .domain.note import Note, normalize_tags
 from .domain.project import Project
 from .errors import (

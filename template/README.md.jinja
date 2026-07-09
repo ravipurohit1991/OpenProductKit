@@ -19,11 +19,18 @@ extensions/          Example plugins (basic, cli, paid).
 
 Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
 
-## The demo: a small Resource Vault
+## The demo: a small Resource Vault (replace it!)
 
 Projects group notes; notes carry tags; you can search notes by project, tag or
 free text. The same core services power the web API, the CLI and the desktop
 app.
+
+The demo is a worked example, not the product — every demo line is fenced with
+a `[demo]` marker (`grep -rn "\[demo\]" packages apps` lists them all), and
+**[AGENTS.md](AGENTS.md)** contains the layer-by-layer recipe for replacing it
+with your own domain. Working with an AI coding agent (Claude Code, Cursor,
+Codex, …)? It reads `AGENTS.md` automatically — *"replace the demo with
+&lt;your idea&gt;"* is a reasonable first prompt.
 
 ```bash
 # via the CLI adapter

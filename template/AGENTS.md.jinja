@@ -1,0 +1,79 @@
+# {{ project_name }} — agent guide
+
+This project was generated from [OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit), a product-template with a hexagonal architecture. It is a **monorepo**: a pure-Python core plus thin web / CLI / desktop adapters, with plugins, licensing, migrations and a generated typed client already wired.
+
+Your most likely job here: **replace the bundled "Resource Vault" demo domain (projects / notes / tags) with the owner's real product.** The recipe is below.
+
+## The one rule
+
+**Business logic never leaves `packages/core`.** FastAPI, Typer, React and pywebview are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service. The core imports nothing but the standard library.
+
+## Layout
+
+| Path | What it is | Notes |
+| --- | --- | --- |
+| `packages/core` | Domain dataclasses, `ports/` (Protocols), `services/` (use-cases) | Pure Python, zero third-party deps |
+| `packages/plugin-api` | Plugin SDK + entry-point registry | Framework — rarely touched |
+| `packages/licensing` | Ed25519 offline license tokens, providers | Framework — rarely touched |
+| `apps/backend` | FastAPI adapter; owns SQLModel persistence + Alembic migrations | Implements the core's ports |
+| `apps/cli` | `{{ cli_name }}` Typer CLI: domain commands **and** the task runner / control plane | |
+| `apps/frontend` | React + Vite; talks to the backend through a **generated** typed client | Never hand-write API types |
+| `apps/desktop` | pywebview shell; dispatches API calls **in-process** (no HTTP server) | Domain-agnostic — new routes just work |
+| `extensions/` | Example plugins (basic route, CLI command, license-gated) | Removable examples |
+
+## Commands
+
+```bash
+uv sync --dev                          # install the Python workspace
+uv run {{ cli_name }} dev              # backend on http://127.0.0.1:8000
+pnpm install && pnpm -C apps/frontend dev   # web UI on http://127.0.0.1:5173
+
+uv run {{ cli_name }} test             # pytest across the workspace
+uv run {{ cli_name }} lint             # ruff check
+uv run {{ cli_name }} fmt              # ruff format
+pnpm -C apps/frontend build            # typecheck + build the frontend
+
+uv run {{ cli_name }} gen              # REGENERATE the typed client after ANY API change
+uv run {{ cli_name }} db revision -m "msg"   # autogenerate a migration from model changes
+uv run {{ cli_name }} db migrate       # apply migrations (also auto-applied on app startup)
+
+uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop   # desktop app (build web first)
+uv run {{ cli_name }} desktop --check  # headless desktop smoke test
+```
+
+## The demo fence
+
+Every line of demo code carries a `[demo]` marker:
+
+```bash
+grep -rn "\[demo\]" packages apps
+```
+
+That output is the complete inventory of what to replace or trim. Unmarked code is framework: keep it, it works with any domain. Files that are *entirely* demo (delete when replacing): `packages/core/src/{{ pkg_slug }}_core/domain/note.py` and `domain/project.py`, `services/notes.py`, `services/projects.py`, `packages/core/tests/test_notes_service.py`, `apps/backend/src/{{ pkg_slug }}_backend/api/routes/notes.py`, `routes/projects.py`, `routes/export.py`, `adapters/db/repository.py`, `apps/frontend/src/VaultView.tsx`. Files with marked demo *sections* (trim, keep the file): `ports/repository.py`, `errors.py`, `{{ pkg_slug }}_core/__init__.py`, `adapters/db/models.py`, `api/deps.py`, `app.py`, `apps/cli/src/{{ pkg_slug }}_cli/main.py`, `apps/frontend/src/client/hooks.ts`, `App.tsx`, `apps/backend/tests/test_api.py`, `apps/desktop/tests/test_bridge.py`.
+
+## Recipe: add a domain entity end-to-end
+
+Work strangler-style: build the new domain **next to** the demo (keep tests green, use the demo as a reference), delete the demo last. Order matters — inside-out:
+
+1. **Domain** — `packages/core/src/{{ pkg_slug }}_core/domain/<entity>.py`: frozen dataclass, validation in `__post_init__`, behavior as methods. No third-party imports.
+2. **Errors** — add `<Entity>NotFoundError(CoreError)` to `packages/core/src/{{ pkg_slug }}_core/errors.py`.
+3. **Port** — a `<Entity>Repository(Protocol)` in `packages/core/src/{{ pkg_slug }}_core/ports/repository.py`: only the methods the use-cases need.
+4. **Service** — `packages/core/src/{{ pkg_slug }}_core/services/<entity>s.py`, constructor takes the port(s). Re-export new names from `{{ pkg_slug }}_core/__init__.py`.
+5. **Core test** — `packages/core/tests/`: in-memory fake repo, no infrastructure. Run `uv run pytest packages/core` before going further.
+6. **Persistence** — `apps/backend/src/{{ pkg_slug }}_backend/adapters/db/`: a `<Entity>Row` SQLModel in `models.py`, a `Sql<Entity>Repository` in `repository.py` mapping Row ↔ dataclass. Then `uv run {{ cli_name }} db revision -m "add <entity>s"` and **review the generated migration** before `db migrate`.
+7. **API** — `apps/backend/src/{{ pkg_slug }}_backend/api/routes/<entity>s.py`: Pydantic In/Out models at the edge, thin handlers, translate `CoreError` subclasses to `HTTPException`. Wire a `<Entity>ServiceDep` in `api/deps.py`; `app.include_router(...)` in `app.py`. Add API tests.
+8. **Typed client** — `uv run {{ cli_name }} gen` (regenerates `apps/frontend/src/client/schema.d.ts`). Never edit that file by hand.
+9. **Frontend** — thin TanStack Query hooks in `apps/frontend/src/client/hooks.ts` typed from `components["schemas"][...]`, a view component, a tab in `App.tsx`. `pnpm -C apps/frontend build` must pass — a type error here usually means a stale client (step 8).
+10. **CLI** — optional: a Typer sub-app in `apps/cli/src/{{ pkg_slug }}_cli/main.py` following the demo's `project`/`note` groups.
+11. **Desktop** — nothing to do; the bridge forwards any route.
+12. **Delete the demo** — follow the `grep` inventory above. For migrations: pre-release, rewrite `0001_initial.py` to create your tables; post-release, add a new revision that drops the Vault tables. Finish with `{{ cli_name }} gen`, `{{ cli_name }} test`, `{{ cli_name }} lint`, and a frontend build.
+
+## Gotchas
+
+- **After any backend API change, run `uv run {{ cli_name }} gen`.** The frontend type errors you see are usually a stale generated client, not your bug.
+- Migrations auto-apply on backend startup and in tests; the schema's source of truth is `apps/backend/migrations/`, not the SQLModel classes.
+- Development licensing uses a stub granting the `pro` plan; set `APP_LICENSE_DEV_PLAN=free` to test locked states. Backend tests assume the stub.
+- Gate paid features with `Depends(require_plan("pro"))` / `require_feature(...)` on routes and `useEntitlement()` + `<LockedFeatureCard/>` in the UI (see the demo's `export.py` before deleting it).
+- The desktop shell loads the **built** UI: run `uv run {{ cli_name }} build web` before `{{ cli_name }} desktop`.
+- Prefer a plugin in `extensions/` over patching the framework when adding optional/sellable capabilities (entry-point group: `{{ pkg_slug }}.plugins`).
+- Python is managed by `uv` (workspace), JS by `pnpm`. Style: ruff (format + lint), strict TypeScript.

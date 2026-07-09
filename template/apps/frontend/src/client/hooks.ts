@@ -7,6 +7,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "./client";
 import type { components } from "./schema";
 
+// --- [demo] Resource Vault hooks — replace with hooks for your own API --------
+
 export type Project = components["schemas"]["ProjectOut"];
 export type Note = components["schemas"]["NoteOut"];
 
@@ -84,7 +86,7 @@ export function useCreateNote() {
   });
 }
 
-// --- plugins ---------------------------------------------------------------
+// --- plugins (framework — keep) ---------------------------------------------
 
 export type PluginInfo = components["schemas"]["PluginOut"];
 
@@ -99,7 +101,7 @@ export function usePlugins() {
   });
 }
 
-// --- license -----------------------------------------------------------------
+// --- license (framework — keep) ------------------------------------------------
 
 export type LicenseStatus = components["schemas"]["LicenseOut"];
 
@@ -128,6 +130,7 @@ export function useEntitlement(requiredPlan?: string | null) {
   return { entitled, plan, isLoading: license.isLoading, license: data };
 }
 
+// [demo] Gated-feature hook for the sample export route.
 export function useExportVault() {
   return useMutation({
     mutationFn: async () => {
