@@ -1,0 +1,56 @@
+site_name: OpenProductKit
+site_description: A white-label product-template for web, CLI, plugins, licensing and more — from one decoupled core.
+repo_url: https://github.com/ravipurohit1991/OpenProductKit
+repo_name: ravipurohit1991/OpenProductKit
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Architecture: architecture.md
+  - CLI reference: cli.md
+  - Plugins: plugins.md
+  - Licensing: licensing.md
+  - Rebranding & updates: rebranding.md
+  - Comparisons:
+      - vs FastAPI full-stack template: comparisons/vs-fastapi-full-stack-template.md
+      - vs desktop boilerplates: comparisons/vs-desktop-boilerplates.md
+      - vs SaaS boilerplates: comparisons/vs-saas-boilerplates.md
+  - Roadmap: roadmap.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

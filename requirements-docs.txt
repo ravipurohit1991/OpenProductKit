@@ -1,0 +1,5 @@
+# Docs toolchain for the OpenProductKit site.
+# Build:  uvx --with-requirements requirements-docs.txt mkdocs build --strict
+# Serve:  uvx --with-requirements requirements-docs.txt mkdocs serve
+mkdocs-material>=9.5
+pymdown-extensions>=10.7

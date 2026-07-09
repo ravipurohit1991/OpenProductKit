@@ -16,6 +16,9 @@ apps/frontend/dist/
 .env
 data/
 
+# Docs build output
+/site/
+
 # OS / editors
 .DS_Store
 Thumbs.db

@@ -1,0 +1,25 @@
+# {{ project_name }}
+
+> {{ project_description }}
+
+This project was generated from [OpenProductKit](https://github.com/ravipurohit1991/OpenProductKit) — a white-label product-template built around one decoupled core with thin web / CLI adapters.
+
+## Run it
+
+```bash
+uv sync --dev
+uv run {{ cli_name }} dev              # API on http://127.0.0.1:8000
+pnpm install && pnpm -C apps/frontend dev
+```
+
+## Serve these docs
+
+```bash
+uv run {{ cli_name }} docs serve       # http://127.0.0.1:8001
+uv run {{ cli_name }} docs build       # static site in ./site
+```
+
+## Learn more
+
+- **[Architecture](architecture.md)** — how the core and adapters fit together.
+- The `{{ cli_name }}` CLI is your control plane — run `{{ cli_name }} --help`.
