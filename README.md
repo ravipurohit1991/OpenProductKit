@@ -18,6 +18,8 @@ The repository is a [**Copier**](https://copier.readthedocs.io) template. You ge
 3. **Rework** — replace the small fenced demo domain with your product, layer by layer, following [the recipe](docs/replace-the-demo.md). Or don't do it by hand: every generated project ships an **`AGENTS.md`** (pre-rendered with your project's names) so you can point Claude Code, Cursor or any coding agent at it and say *"replace the demo with \<my idea\>"*.
 4. **Ship** — the packaging, licensing and update story is already built.
 
+**Proof it works:** [Tally](https://github.com/ravipurohit1991/tally-time-tracker), a freelancer time tracker, was generated from this template and reworked by an AI agent following `AGENTS.md` — the first commit is the pristine template output, every commit after is one layer of the rework. [The blog post](docs/blog/introducing-openproductkit.md) walks through it.
+
 📖 **Docs:** [architecture](docs/architecture.md) · [make it yours](docs/replace-the-demo.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
 
 ---
@@ -26,7 +28,7 @@ The repository is a [**Copier**](https://copier.readthedocs.io) template. You ge
 
 ```bash
 # 1. Generate a project (Copier is run through uv — no global install needed)
-uvx copier copy gh:youruser/openproductkit my-product
+uvx copier copy gh:ravipurohit1991/OpenProductKit my-product
 #   or, from a local clone:
 uvx copier copy . ../my-product
 
