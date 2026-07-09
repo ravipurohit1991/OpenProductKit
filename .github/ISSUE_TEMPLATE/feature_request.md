@@ -11,8 +11,8 @@ What are you trying to do that the template makes hard today?
 
 **Proposed solution**
 
-What you'd like to see. Note if it fits v1 or belongs on the v1.1 roadmap
-(desktop, real licensing providers, runtime plugins).
+What you'd like to see. Note if it belongs in the core template or on the
+roadmap (runtime plugin loading, optional recipes).
 
 **Alternatives considered**
 

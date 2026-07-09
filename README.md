@@ -11,7 +11,14 @@ This is a *product-template operating system*: clone it, answer a few questions,
 
 The repository is a [**Copier**](https://copier.readthedocs.io) template. You generate a fresh project from it, and later pull upstream template improvements with `copier update`.
 
-📖 **Docs:** [architecture](docs/architecture.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
+**The intended journey:**
+
+1. **Generate** — `copier copy`, answer a few questions; every package, import and window title carries *your* name.
+2. **Run** — a working product on day one: web, CLI and desktop over one core, with licensing, plugins, migrations, typed client, tests and CI.
+3. **Rework** — replace the small fenced demo domain with your product, layer by layer, following [the recipe](docs/replace-the-demo.md). Or don't do it by hand: every generated project ships an **`AGENTS.md`** (pre-rendered with your project's names) so you can point Claude Code, Cursor or any coding agent at it and say *"replace the demo with \<my idea\>"*.
+4. **Ship** — the packaging, licensing and update story is already built.
+
+📖 **Docs:** [architecture](docs/architecture.md) · [make it yours](docs/replace-the-demo.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
 
 ---
 
@@ -38,6 +45,10 @@ pnpm install && pnpm -C apps/frontend dev   # rich web UI on http://127.0.0.1:51
 
 # 5. Or as a desktop app (same core, no HTTP server)
 uv run opk build web && uv run opk desktop
+
+# 6. Make it your product: the demo is fenced — this lists everything to replace
+grep -rn "\[demo\]" packages apps
+#    …or hand the job to your AI agent: it reads AGENTS.md and knows the recipe.
 ```
 
 ## Architecture — one core, many adapters
@@ -57,7 +68,9 @@ The rule that keeps this template straight forward: **business logic never leaks
 
 ## What's here today
 
-**v1**
+> **Version note:** the template and every generated package are at **0.1.0**. A `v1.0` will be tagged only once the surface has proven stable in real projects — the milestones below track scope, not release versions.
+
+**Milestone 1 — foundation (shipped)**
 
 - [x] **P1** Shippable skeleton: hexagonal `core`, FastAPI backend, Typer CLI, React web UI, CI, one-command dev
 - [x] **P2** Minimal demo product (Resource Vault: projects, notes, tags, search) — through core, backend, CLI and web
@@ -66,10 +79,14 @@ The rule that keeps this template straight forward: **business logic never leaks
 - [x] **P5** Extension manager (dev-time Python entry-point plugins: SDK, registry, license gating, backend + CLI + admin UI, 3 example plugins)
 - [x] **P6** Rebranding via Copier (`copier update`) + MkDocs docs site, comparisons, SECURITY/CONTRIBUTING
 
-**v1.1**
+**Milestone 2 — licensing & desktop (shipped)**
 
 - [x] **P7** Real licensing: Ed25519 signed offline tokens, file/HTTP providers, vendor tooling (`opk license keygen|issue`), route gates (`require_plan`/`require_feature`), `useEntitlement()` + `LockedFeatureCard`, License admin tab, gated demo feature
 - [x] **P8** Desktop: pywebview shell calling the core **in-process** over a JS bridge (no HTTP sidecar, no port), per-user app data, `opk build desktop` (PyInstaller onedir). Code signing: documented, not solved
+
+**Milestone 3 — agent-ready (shipped)**
+
+- [x] **P9** Agent-ready rework path: every demo line fenced with a grep-able `[demo]` marker, a [replace-the-demo recipe](docs/replace-the-demo.md), and an `AGENTS.md` + `CLAUDE.md` in every generated project — pre-rendered with your project's names — so AI coding agents can do the rework
 
 Next: runtime plugin loading (install/enable without rebuild, sandboxing) — see the [roadmap](docs/roadmap.md).
 

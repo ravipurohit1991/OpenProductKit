@@ -1,3 +1,4 @@
+# [demo] Resource Vault sample domain — replace with your product's entities (see AGENTS.md).
 """The Note domain entity.
 
 Deliberately a plain stdlib dataclass with zero third-party dependencies. The

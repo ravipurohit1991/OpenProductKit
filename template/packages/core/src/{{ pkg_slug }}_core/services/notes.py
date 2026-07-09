@@ -1,3 +1,4 @@
+# [demo] Resource Vault sample domain — replace with your product's services (see AGENTS.md).
 """Note use-cases, expressed against ports only."""
 
 from __future__ import annotations

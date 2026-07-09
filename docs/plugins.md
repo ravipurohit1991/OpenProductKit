@@ -5,7 +5,7 @@ Plugins are ordinary Python packages that advertise a `Plugin` through the `<pkg
 !!! note "This is a dev-time model"
     Plugins are installed Python packages discovered via entry points — there is
     no arbitrary runtime code loading. Runtime / end-user plugin installation is a
-    roadmap item, kept off the v1 surface on purpose. This is the honest model,
+    roadmap item, kept off the current surface on purpose. This is the honest model,
     which matters more than an impressive-but-insecure one.
 
 ## What a plugin can contribute

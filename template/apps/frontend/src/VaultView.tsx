@@ -1,3 +1,4 @@
+// [demo] Resource Vault sample UI — replace with your product's views (see AGENTS.md).
 import { useEffect, useState, type FormEvent } from "react";
 
 import { LockedFeatureCard } from "./LockedFeatureCard";

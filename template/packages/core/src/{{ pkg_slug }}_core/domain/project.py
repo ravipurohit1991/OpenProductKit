@@ -1,3 +1,4 @@
+# [demo] Resource Vault sample domain — replace with your product's entities (see AGENTS.md).
 """The Project domain entity — a container that groups notes."""
 
 from __future__ import annotations

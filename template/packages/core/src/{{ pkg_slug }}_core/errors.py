@@ -7,6 +7,9 @@ class CoreError(Exception):
     """Base class for all domain errors raised by the core."""
 
 
+# [demo] Sample-domain errors — replace alongside the Resource Vault domain.
+
+
 class NoteNotFoundError(CoreError):
     def __init__(self, note_id: str) -> None:
         super().__init__(f"Note not found: {note_id}")

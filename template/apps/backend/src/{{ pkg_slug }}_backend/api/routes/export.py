@@ -1,3 +1,5 @@
+# [demo] Resource Vault sample domain — but ALSO the license-gating example.
+# When you replace it, keep the pattern: `Depends(require_plan(...))` on a route.
 """Vault export — the demo of a license-gated route.
 
 The whole gate is the one `Depends(require_plan("pro"))` line; everything else

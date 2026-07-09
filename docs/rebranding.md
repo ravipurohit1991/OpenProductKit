@@ -34,3 +34,10 @@ Copier performs a three-way merge between the template version you generated fro
 !!! tip
     Commit your generated project to git before running `copier update` so the
     merge is reviewable as a normal diff.
+
+### Updating after you've replaced the demo
+
+Once you have [replaced the Resource Vault demo](replace-the-demo.md) with your own domain, expect two kinds of files during `copier update`:
+
+- **Framework files you never touched** (licensing, plugin system, desktop shell, CLI control plane, CI) merge cleanly — this is where upstream improvements keep flowing in.
+- **Demo files you rewrote or deleted** will conflict or reappear. That is expected: you replaced them on purpose. Resolve in favor of your version — keep your files, delete resurrected demo files. The demo is a scaffold, not a maintained surface.

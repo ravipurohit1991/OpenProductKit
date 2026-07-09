@@ -24,7 +24,7 @@ from sqlmodel import Session
 
 from {{ pkg_slug }}_backend.adapters.db.engine import engine
 from {{ pkg_slug }}_backend.adapters.db.plugin_state import set_enabled
-from {{ pkg_slug }}_backend.adapters.db.repository import (
+from {{ pkg_slug }}_backend.adapters.db.repository import (  # [demo]
     SqlNoteRepository,
     SqlProjectRepository,
 )
@@ -32,8 +32,8 @@ from {{ pkg_slug }}_backend.db import downgrade, make_revision, upgrade_head
 from {{ pkg_slug }}_backend.licensing import get_license_provider
 from {{ pkg_slug }}_backend.plugins import build_registry
 from {{ pkg_slug }}_core.errors import CoreError
-from {{ pkg_slug }}_core.services.notes import NoteService
-from {{ pkg_slug }}_core.services.projects import ProjectService
+from {{ pkg_slug }}_core.services.notes import NoteService  # [demo]
+from {{ pkg_slug }}_core.services.projects import ProjectService  # [demo]
 from {{ pkg_slug }}_licensing import LicenseInfo, generate_keypair, issue_token, verify_token
 from {{ pkg_slug }}_plugin_api import ENTRYPOINT_GROUP, discover
 
@@ -43,8 +43,8 @@ app = typer.Typer(
     add_completion=False,
 )
 
-project_app = typer.Typer(help="Manage projects.", no_args_is_help=True)
-note_app = typer.Typer(help="Manage notes.", no_args_is_help=True)
+project_app = typer.Typer(help="Manage projects.", no_args_is_help=True)  # [demo]
+note_app = typer.Typer(help="Manage notes.", no_args_is_help=True)  # [demo]
 db_app = typer.Typer(help="Database migrations.", no_args_is_help=True)
 build_app = typer.Typer(help="Build artifacts.", no_args_is_help=True)
 docs_app = typer.Typer(help="Documentation site.", no_args_is_help=True)
@@ -52,8 +52,8 @@ plugin_app = typer.Typer(help="Manage extensions / plugins.", no_args_is_help=Tr
 license_app = typer.Typer(
     help="License status, install and vendor tooling (keygen/issue).", no_args_is_help=True
 )
-app.add_typer(project_app, name="project")
-app.add_typer(note_app, name="note")
+app.add_typer(project_app, name="project")  # [demo]
+app.add_typer(note_app, name="note")  # [demo]
 app.add_typer(db_app, name="db")
 app.add_typer(build_app, name="build")
 app.add_typer(docs_app, name="docs")
@@ -308,7 +308,7 @@ def docs_build() -> None:
     raise typer.Exit(_run(["uv", "run", "--group", "docs", "mkdocs", "build"]))
 
 
-# --- projects -----------------------------------------------------------------
+# --- [demo] projects — sample-domain commands; replace with your own -----------
 
 
 @project_app.command("add")
@@ -331,7 +331,7 @@ def project_list() -> None:
         typer.echo(f"{project.id}  {project.name}")
 
 
-# --- notes --------------------------------------------------------------------
+# --- [demo] notes — sample-domain commands; replace with your own --------------
 
 
 @note_app.command("add")

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { LicensePanel } from "./LicensePanel";
 import { PluginManager } from "./PluginManager";
-import { VaultView } from "./VaultView";
+import { VaultView } from "./VaultView"; // [demo]
 import { APP_NAME } from "./config";
 
 type Tab = "vault" | "plugins" | "license";
@@ -30,12 +30,12 @@ export function App() {
     <main style={{ fontFamily: "system-ui", maxWidth: 900, margin: "2.5rem auto", padding: "0 1rem" }}>
       <h1>{APP_NAME}</h1>
       <nav style={{ display: "flex", gap: 8, margin: "1rem 0 1.5rem" }}>
-        {tabButton("vault", "Resource Vault")}
+        {tabButton("vault", "Resource Vault")} {/* [demo] */}
         {tabButton("plugins", "Plugins")}
         {tabButton("license", "License")}
       </nav>
 
-      {tab === "vault" && <VaultView />}
+      {tab === "vault" && <VaultView />} {/* [demo] */}
       {tab === "plugins" && <PluginManager />}
       {tab === "license" && <LicensePanel />}
     </main>

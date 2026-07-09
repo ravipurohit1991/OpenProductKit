@@ -16,6 +16,8 @@ def test_bridge_dispatches_to_the_app_in_process() -> None:
         assert health["status"] == 200
         assert json.loads(health["body"]) == {"status": "ok"}
 
+        # [demo] Uses the sample-domain routes as payloads; point these at your
+        # own endpoints when the Resource Vault demo is gone.
         created = api.request(
             {"method": "POST", "path": "/api/projects", "body": '{"name": "Desktop"}'}
         )

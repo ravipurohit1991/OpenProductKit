@@ -19,6 +19,9 @@ from ..adapters.db.repository import SqlNoteRepository, SqlProjectRepository
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
+# [demo] SessionDep above is framework. The service wiring below belongs to the
+# Resource Vault sample domain — replace it with wiring for your own services.
+
 
 def get_project_service(session: SessionDep) -> ProjectService:
     return ProjectService(SqlProjectRepository(session))
