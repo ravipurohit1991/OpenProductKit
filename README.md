@@ -20,7 +20,7 @@ The repository is a [**Copier**](https://copier.readthedocs.io) template. You ge
 
 **Proof it works:** [Tally](https://github.com/ravipurohit1991/tally-time-tracker), a freelancer time tracker, was generated from this template and reworked by an AI agent following `AGENTS.md` — the first commit is the pristine template output, every commit after is one layer of the rework. [The blog post](docs/blog/introducing-openproductkit.md) walks through it.
 
-📖 **Docs:** [architecture](docs/architecture.md) · [make it yours](docs/replace-the-demo.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
+📖 **Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) · [architecture](docs/architecture.md) · [make it yours](docs/replace-the-demo.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [desktop](docs/desktop.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
 
 ---
 
