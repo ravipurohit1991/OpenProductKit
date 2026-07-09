@@ -1,0 +1,41 @@
+from {{ pkg_slug }}_plugin_api import Plugin, PluginManifest, PluginRegistry
+
+
+class FakePlugin(Plugin):
+    def __init__(self, plugin_id: str, plan: str | None = None) -> None:
+        self._manifest = PluginManifest(id=plugin_id, name=plugin_id, required_plan=plan)
+
+    @property
+    def manifest(self) -> PluginManifest:
+        return self._manifest
+
+
+def _registry(enabled: dict[str, bool], entitled: dict[str, bool]) -> PluginRegistry:
+    plugins = [FakePlugin("free"), FakePlugin("paid", plan="pro")]
+    return PluginRegistry(
+        plugins,
+        is_enabled=lambda pid: enabled[pid],
+        is_entitled=lambda m: entitled[m.id],
+    )
+
+
+def test_active_requires_enabled_and_entitled() -> None:
+    reg = _registry(
+        enabled={"free": True, "paid": True},
+        entitled={"free": True, "paid": False},
+    )
+    assert {v.manifest.id for v in reg.active()} == {"free"}
+    assert reg.get("paid").entitled is False
+
+
+def test_disabled_plugin_is_not_active() -> None:
+    reg = _registry(
+        enabled={"free": False, "paid": True},
+        entitled={"free": True, "paid": True},
+    )
+    assert {v.manifest.id for v in reg.active()} == {"paid"}
+
+
+def test_get_unknown_returns_none() -> None:
+    reg = _registry({"free": True, "paid": True}, {"free": True, "paid": True})
+    assert reg.get("missing") is None

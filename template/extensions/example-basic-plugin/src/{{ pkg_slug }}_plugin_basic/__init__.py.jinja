@@ -1,0 +1,47 @@
+"""A minimal free plugin.
+
+Shows the smallest useful thing a plugin can do: contribute a backend route and
+declare a settings schema. Discovered via the `{{ pkg_slug }}.plugins` entry point.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter
+
+from {{ pkg_slug }}_plugin_api import HealthStatus, Plugin, PluginManifest
+
+
+class BasicPlugin(Plugin):
+    manifest = PluginManifest(
+        id="example.basic",
+        name="Basic Example",
+        version="0.1.0",
+        author="{{ author_name }}",
+        description="A free example plugin that adds a /api/ext/basic/ping route.",
+        permissions=("network:none",),
+    )
+
+    def backend_router(self) -> APIRouter:
+        router = APIRouter(prefix="/api/ext/basic", tags=["ext:basic"])
+
+        @router.get("/ping")
+        def ping() -> dict[str, str]:
+            return {"plugin": "example.basic", "pong": "ok"}
+
+        return router
+
+    def settings_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "greeting": {"type": "string", "default": "hello", "title": "Greeting"},
+            },
+        }
+
+    def health(self) -> HealthStatus:
+        return HealthStatus.ok("ready")
+
+
+PLUGIN = BasicPlugin()

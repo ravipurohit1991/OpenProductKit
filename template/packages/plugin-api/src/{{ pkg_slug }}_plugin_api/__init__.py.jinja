@@ -1,0 +1,29 @@
+"""Extension SDK.
+
+Plugins are ordinary Python packages that advertise a `Plugin` instance through
+a packaging entry point in the group below. The host app discovers them with
+`importlib.metadata` — no dynamic code loading, no arbitrary execution beyond
+importing an installed, declared package. This is the honest, dev-time plugin
+model; runtime/end-user installation is a roadmap item.
+"""
+
+from .health import HealthLevel, HealthStatus
+from .manifest import PluginManifest
+from .nav import NavItem
+from .plugin import Plugin
+from .registry import PluginRegistry, PluginView, discover
+
+#: Packaging entry-point group that plugins register themselves under.
+ENTRYPOINT_GROUP = "{{ pkg_slug }}.plugins"
+
+__all__ = [
+    "ENTRYPOINT_GROUP",
+    "Plugin",
+    "PluginManifest",
+    "PluginRegistry",
+    "PluginView",
+    "NavItem",
+    "HealthStatus",
+    "HealthLevel",
+    "discover",
+]

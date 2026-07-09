@@ -87,3 +87,33 @@ def test_empty_title_is_rejected(client) -> None:
 def test_missing_note_is_404(client) -> None:
     resp = client.get("/api/notes/nope")
     assert resp.status_code == 404
+
+
+# --- plugins ------------------------------------------------------------------
+
+
+def test_example_plugins_are_discovered(client) -> None:
+    ids = {p["id"] for p in client.get("/api/plugins").json()}
+    assert {"example.basic", "example.cli", "example.paid"} <= ids
+
+
+def test_basic_plugin_route_reflects_enabled_state(client) -> None:
+    assert client.get("/api/ext/basic/ping").json()["pong"] == "ok"
+
+    client.post("/api/plugins/example.basic/disable")
+    assert client.get("/api/ext/basic/ping").status_code == 404
+
+    client.post("/api/plugins/example.basic/enable")
+    assert client.get("/api/ext/basic/ping").status_code == 200
+
+
+def test_paid_plugin_is_entitled_by_dev_license(client) -> None:
+    paid = next(p for p in client.get("/api/plugins").json() if p["id"] == "example.paid")
+    assert paid["required_plan"] == "pro"
+    assert paid["entitled"] is True
+    # Its license-gated route is mounted and works.
+    assert client.get("/api/ext/paid/summary").status_code == 200
+
+
+def test_toggling_unknown_plugin_is_404(client) -> None:
+    assert client.post("/api/plugins/nope/enable").status_code == 404

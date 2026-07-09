@@ -1,0 +1,34 @@
+"""A free plugin that contributes a CLI command group.
+
+Once installed, its Typer app is attached to the main CLI, so `{{ cli_name }} example-cli …`
+becomes available. Discovered via the `{{ pkg_slug }}.plugins` entry point.
+"""
+
+from __future__ import annotations
+
+import typer
+
+from {{ pkg_slug }}_plugin_api import Plugin, PluginManifest
+
+
+class CliPlugin(Plugin):
+    manifest = PluginManifest(
+        id="example.cli",
+        name="CLI Example",
+        version="0.1.0",
+        author="{{ author_name }}",
+        description="A free example plugin that adds an `{{ cli_name }} example-cli` command.",
+    )
+
+    def cli(self) -> typer.Typer:
+        app = typer.Typer(help="Example plugin commands.", no_args_is_help=True)
+
+        @app.command()
+        def greet(name: str = typer.Argument("world")) -> None:
+            """Greet someone from the example plugin."""
+            typer.echo(f"[example.cli plugin] hello, {name}!")
+
+        return app
+
+
+PLUGIN = CliPlugin()

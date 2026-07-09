@@ -1,0 +1,46 @@
+"""A license-gated plugin.
+
+It requires the "pro" plan (see the manifest). The host only mounts its routes
+if the license provider says the current installation is entitled — the seam a
+real license backend plugs into in P7. It also shows a plugin consuming host
+services (the database session and models).
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+from sqlalchemy import func
+from sqlmodel import select
+
+from {{ pkg_slug }}_backend.adapters.db.models import NoteRow, ProjectRow
+from {{ pkg_slug }}_backend.api.deps import SessionDep
+from {{ pkg_slug }}_plugin_api import HealthStatus, Plugin, PluginManifest
+
+
+class PaidPlugin(Plugin):
+    manifest = PluginManifest(
+        id="example.paid",
+        name="Analytics (Pro)",
+        version="0.1.0",
+        author="{{ author_name }}",
+        description="A license-gated plugin that summarizes projects and notes.",
+        permissions=("network:none",),
+        required_plan="pro",
+    )
+
+    def backend_router(self) -> APIRouter:
+        router = APIRouter(prefix="/api/ext/paid", tags=["ext:paid"])
+
+        @router.get("/summary")
+        def summary(session: SessionDep) -> dict[str, int]:
+            projects = session.exec(select(func.count()).select_from(ProjectRow)).one()
+            notes = session.exec(select(func.count()).select_from(NoteRow)).one()
+            return {"projects": projects, "notes": notes}
+
+        return router
+
+    def health(self) -> HealthStatus:
+        return HealthStatus.ok("ready")
+
+
+PLUGIN = PaidPlugin()

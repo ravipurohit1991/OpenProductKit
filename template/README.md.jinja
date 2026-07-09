@@ -8,9 +8,12 @@ Generated from [OpenProductKit](https://github.com/youruser/openproductkit) — 
 
 ```
 packages/core        Pure Python domain models + Repository ports. No FastAPI, no DB, no HTTP.
+packages/plugin-api  Extension SDK: the Plugin contract + registry. No runtime deps.
+packages/licensing   Entitlement abstraction (dev stub; real providers land later).
 apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
 apps/cli             Typer CLI + task runner ({{ cli_name }}).
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP.
+extensions/          Example plugins (basic, cli, paid).
 ```
 
 Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
@@ -34,6 +37,32 @@ GET/POST /api/projects            list / create projects
 GET      /api/projects/{id}       fetch a project
 GET/POST /api/notes               search (?project_id=&tag=&q=) / create
 GET      /api/notes/{id}          fetch a note
+```
+
+## Plugins / extensions
+
+Plugins are ordinary Python packages that advertise a `Plugin` through the
+`{{ pkg_slug }}.plugins` entry-point group. The host discovers them with
+`importlib.metadata` — a **dev-time** model (no arbitrary runtime code loading;
+end-user/runtime install is a roadmap item). A plugin can contribute backend
+routes, CLI commands, a settings schema, admin nav items and a health check, and
+may declare a `required_plan` that the license provider gates on.
+
+Three examples live in `extensions/`: `basic` (a backend route), `cli` (adds
+`{{ cli_name }} example-cli`), and `paid` (license-gated analytics, needs the `pro`
+plan). Manage them from the CLI or the **Plugins** tab in the web UI:
+
+```bash
+uv run {{ cli_name }} plugin list
+uv run {{ cli_name }} plugin disable example.basic
+uv run {{ cli_name }} plugin enable example.basic
+uv run {{ cli_name }} example-cli greet Ada        # command from the cli plugin
+```
+
+```
+GET  /api/plugins                 list installed plugins + state
+POST /api/plugins/{id}/enable     enable a plugin
+POST /api/plugins/{id}/disable    disable a plugin
 ```
 
 ## Develop

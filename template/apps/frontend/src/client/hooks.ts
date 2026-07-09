@@ -83,3 +83,33 @@ export function useCreateNote() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
   });
 }
+
+// --- plugins ---------------------------------------------------------------
+
+export type PluginInfo = components["schemas"]["PluginOut"];
+
+export function usePlugins() {
+  return useQuery({
+    queryKey: ["plugins"],
+    queryFn: async () => {
+      const { data, error } = await client.GET("/api/plugins");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
+export function useSetPluginEnabled() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
+      const params = { path: { plugin_id: id } };
+      const { data, error } = enabled
+        ? await client.POST("/api/plugins/{plugin_id}/enable", { params })
+        : await client.POST("/api/plugins/{plugin_id}/disable", { params });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["plugins"] }),
+  });
+}
