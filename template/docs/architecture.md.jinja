@@ -1,0 +1,25 @@
+# Architecture
+
+Business logic lives only in `packages/core`. Everything else is a delivery mechanism around it.
+
+```mermaid
+flowchart LR
+    core["packages/core<br/>domain + ports + services<br/>(pure Python)"]
+    be["apps/backend<br/>FastAPI + SQLModel"]
+    cli["apps/cli<br/>{{ cli_name }}"]
+    fe["apps/frontend<br/>React + typed client"]
+
+    cli --> core
+    be --> core
+    fe -->|HTTP| be
+```
+
+| Layer | Responsibility |
+| --- | --- |
+| `packages/core` | Domain models, repository ports, services. No FastAPI, no DB, no HTTP. |
+| `apps/backend` | FastAPI adapter; owns SQLModel persistence + Alembic migrations. |
+| `apps/cli` | Typer CLI (`{{ cli_name }}`) — another adapter and the task runner. |
+| `apps/frontend` | React web UI over a client generated from the OpenAPI schema. |
+| `packages/plugin-api`, `extensions/` | The plugin SDK and example plugins. |
+
+To extend the app, prefer a **plugin** (see `extensions/`) over editing the core.

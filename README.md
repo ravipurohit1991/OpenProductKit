@@ -11,6 +11,8 @@ This is a *product-template operating system*: clone it, answer a few questions,
 
 The repository is a [**Copier**](https://copier.readthedocs.io) template. You generate a fresh project from it, and later pull upstream template improvements with `copier update`.
 
+📖 **Docs:** [architecture](docs/architecture.md) · [plugins](docs/plugins.md) · [licensing](docs/licensing.md) · [rebranding & updates](docs/rebranding.md) · [comparisons](docs/comparisons/vs-fastapi-full-stack-template.md) — the full site is built with MkDocs Material (`uvx --with-requirements requirements-docs.txt mkdocs serve`).
+
 ---
 
 ## Quickstart
@@ -56,7 +58,7 @@ The rule that keeps this template straight forward: **business logic never leaks
 - [x] **P3** Generated typed client (OpenAPI → openapi-typescript + openapi-fetch + TanStack Query hooks)
 - [x] **P4** CLI as framework / control plane (Alembic migrations, `db`/`build` groups, `info`/`fmt`/`version`)
 - [x] **P5** Extension manager (dev-time Python entry-point plugins: SDK, registry, license gating, backend + CLI + admin UI, 3 example plugins)
-- [ ] **P6** Rebranding via Copier + docs site
+- [x] **P6** Rebranding via Copier (`copier update`) + MkDocs docs site, comparisons, SECURITY/CONTRIBUTING
 
 Deferred to v1.1: desktop (Tauri, in-process core), real licensing providers, runtime plugin loading.
 

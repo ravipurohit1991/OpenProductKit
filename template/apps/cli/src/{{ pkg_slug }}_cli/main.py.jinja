@@ -43,11 +43,13 @@ project_app = typer.Typer(help="Manage projects.", no_args_is_help=True)
 note_app = typer.Typer(help="Manage notes.", no_args_is_help=True)
 db_app = typer.Typer(help="Database migrations.", no_args_is_help=True)
 build_app = typer.Typer(help="Build artifacts.", no_args_is_help=True)
+docs_app = typer.Typer(help="Documentation site.", no_args_is_help=True)
 plugin_app = typer.Typer(help="Manage extensions / plugins.", no_args_is_help=True)
 app.add_typer(project_app, name="project")
 app.add_typer(note_app, name="note")
 app.add_typer(db_app, name="db")
 app.add_typer(build_app, name="build")
+app.add_typer(docs_app, name="docs")
 app.add_typer(plugin_app, name="plugin")
 
 
@@ -218,6 +220,23 @@ def db_reset() -> None:
 def build_web() -> None:
     """Build the production web bundle."""
     raise typer.Exit(_run(["pnpm", "-C", "apps/frontend", "build"]))
+
+
+# --- docs ---------------------------------------------------------------------
+
+
+@docs_app.command("serve")
+def docs_serve(port: int = 8001) -> None:
+    """Serve the docs site locally (installs the docs group on demand)."""
+    raise typer.Exit(
+        _run(["uv", "run", "--group", "docs", "mkdocs", "serve", "-a", f"127.0.0.1:{port}"])
+    )
+
+
+@docs_app.command("build")
+def docs_build() -> None:
+    """Build the static docs site into ./site."""
+    raise typer.Exit(_run(["uv", "run", "--group", "docs", "mkdocs", "build"]))
 
 
 # --- projects -----------------------------------------------------------------
