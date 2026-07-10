@@ -1,10 +1,12 @@
 """Plugin wiring for the backend.
 
 Discovery (entry points) needs no database, so plugin routers are mounted at app
-construction. Each router is gated by a per-request dependency that checks the
-plugin's persisted enabled state — so toggling a plugin in the manager takes
-effect immediately, no restart. The license gate is applied once at mount time:
-an unlicensed plugin's routes are never mounted.
+construction. Each router is gated by a per-request dependency that checks both
+the plugin's persisted enabled state *and* its license entitlement — so toggling
+a plugin in the manager or unlocking it in the marketplace takes effect
+immediately, no restart. A disabled plugin 404s; a locked plugin 403s with the
+same structured detail as `require_plan`, which the frontend renders as a
+LockedFeatureCard.
 """
 
 from __future__ import annotations
@@ -16,9 +18,9 @@ from sqlmodel import Session
 
 from {{ pkg_slug }}_plugin_api import ENTRYPOINT_GROUP, Plugin, PluginRegistry, discover
 
+from . import licensing
 from .adapters.db.plugin_state import get_enabled_map
 from .api.deps import SessionDep
-from .licensing import get_license_provider
 
 
 @lru_cache
@@ -28,7 +30,7 @@ def discovered_plugins() -> tuple[Plugin, ...]:
 
 def build_registry(session: Session) -> PluginRegistry:
     enabled = get_enabled_map(session)
-    license_provider = get_license_provider()
+    license_provider = licensing.get_license_provider()
     return PluginRegistry(
         discovered_plugins(),
         is_enabled=lambda plugin_id: enabled.get(plugin_id, True),  # enabled by default
@@ -36,23 +38,32 @@ def build_registry(session: Session) -> PluginRegistry:
     )
 
 
-def _require_enabled(plugin_id: str):
+def _require_active(plugin_id: str, required_plan: str | None):
     def dependency(session: SessionDep) -> None:
         if not get_enabled_map(session).get(plugin_id, True):
             raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' is disabled")
+        provider = licensing.get_license_provider()
+        if not provider.is_entitled(required_plan):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "license_required",
+                    "current_plan": provider.current_plan(),
+                    "required_plan": required_plan,
+                    "plugin_id": plugin_id,
+                },
+            )
 
     return dependency
 
 
 def mount_plugin_routers(app: FastAPI) -> None:
-    license_provider = get_license_provider()
     for plugin in discovered_plugins():
         router = plugin.backend_router()
         manifest = plugin.manifest
         if router is None:
             continue
-        if not license_provider.is_entitled(manifest.required_plan):
-            continue  # license gate: unlicensed plugin routes are not mounted
         app.include_router(
-            router, dependencies=[Depends(_require_enabled(manifest.id))]
+            router,
+            dependencies=[Depends(_require_active(manifest.id, manifest.required_plan))],
         )

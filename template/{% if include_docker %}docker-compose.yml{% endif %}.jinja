@@ -1,0 +1,89 @@
+name: {{ project_slug }}
+
+# The full product stack, one command: `{{ cli_name }} stack up` (or
+# `docker compose up --build -d`). Open http://localhost:8080.
+#
+#   web      nginx serving the built frontend, proxying /api to the backend
+#   backend  the FastAPI app{% if database == 'postgres' %}
+#   db       PostgreSQL 16 with a persistent volume{% endif %}{% if include_tunnel %}
+#   tunnel   optional Cloudflare quick tunnel: `{{ cli_name }} stack share`
+#            (profile "share") gives the stack a public trycloudflare.com URL{% endif %}
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    image: {{ project_slug }}-backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+{%- if database == 'postgres' %}
+      APP_DATABASE_URL: postgresql+psycopg://app:app@db:5432/app
+{%- else %}
+      APP_DATABASE_URL: sqlite:////app/data/app.db
+{%- endif %}
+{%- if database == 'postgres' %}
+    depends_on:
+      db:
+        condition: service_healthy
+{%- else %}
+    volumes:
+      - app-data:/app/data
+{%- endif %}
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    image: {{ project_slug }}-web
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+{%- if database == 'postgres' %}
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+{%- endif %}
+{%- if include_tunnel %}
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["share"]
+    command: tunnel --no-autoupdate --url http://web:80
+    depends_on:
+      - web
+{%- endif %}
+
+volumes:
+{%- if database == 'postgres' %}
+  db-data:
+{%- else %}
+  app-data:
+{%- endif %}

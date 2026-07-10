@@ -1,0 +1,98 @@
+"""The desktop sidecar server: the FastAPI backend serving API *and* web UI.
+
+The Electron shell spawns this on a free localhost port and points its window
+at it — one origin, no CORS, no file:// quirks. In dev it runs from source
+(`uv run python apps/desktop-electron/server.py`); packaged builds run the
+PyInstaller bundle of this file ({{ cli_name }} build desktop), which carries
+the web build under `frontend/` and alembic under `alembic/` as data files.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+from platformdirs import user_data_dir
+
+DATA_DIR_NAME = "{{ project_slug }}"
+
+
+def prepare_environment() -> Path:
+    """Point the app at a per-user data directory (database, license file).
+
+    Must run before the backend settings module is imported, which is why the
+    backend imports below live inside functions.
+    """
+    data_dir = Path(user_data_dir(DATA_DIR_NAME, appauthor=False))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = (data_dir / "app.db").as_posix()
+    os.environ.setdefault("APP_DATABASE_URL", f"sqlite:///{db_path}")
+    os.environ.setdefault("APP_LICENSE_FILE", str(data_dir / "license.key"))
+    if getattr(sys, "frozen", False):
+        # PyInstaller bundle: serve the web build shipped as data files.
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        os.environ.setdefault("APP_WEB_DIST", str(base / "frontend"))
+    else:
+        repo_root = Path(__file__).resolve().parents[2]
+        os.environ.setdefault("APP_WEB_DIST", str(repo_root / "apps" / "frontend" / "dist"))
+    return data_dir
+
+
+def check() -> int:
+    """Boot the server, hit /api/health over real HTTP, shut down. CI-friendly."""
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    from {{ pkg_slug }}_backend.app import app
+
+    with socket.socket() as probe:  # any free port will do for a smoke test
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}/api/health"
+    ok = False
+    for _ in range(50):
+        try:
+            with urllib.request.urlopen(url, timeout=1) as resp:
+                ok = resp.status == 200
+                break
+        except OSError:
+            time.sleep(0.2)
+    server.should_exit = True
+    thread.join(timeout=5)
+    print(f"sidecar check: {'OK' if ok else 'FAILED'} {url}")
+    return 0 if ok else 1
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the {{ project_name }} sidecar server.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--check", action="store_true", help="Boot, hit /api/health, exit (no window, no shell)."
+    )
+    args = parser.parse_args()
+
+    prepare_environment()
+
+    if args.check:
+        raise SystemExit(check())
+
+    import uvicorn
+
+    from {{ pkg_slug }}_backend.app import app
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

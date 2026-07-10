@@ -13,8 +13,15 @@ packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/
 apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
 apps/cli             Typer CLI + task runner ({{ cli_name }}).
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP - or the desktop bridge.
+{%- if desktop_framework == 'pywebview' %}
 apps/desktop         pywebview shell: the same UI + core in one process. No sidecar, no port.
-extensions/          Example plugins (basic, cli, paid).
+{%- elif desktop_framework == 'electron' %}
+apps/desktop-electron  Electron shell over a sidecar backend on localhost (one origin, no CORS).
+{%- elif desktop_framework == 'tauri' %}
+apps/desktop-tauri   Tauri (Rust) shell over a sidecar backend on localhost (one origin, no CORS).
+{%- endif %}
+extensions/          Example plugins (basic, cli, paid, and the on-demand marketplace demo).
+marketplace/         catalog.json — what the Marketplace tab offers beyond installed plugins.
 ```
 
 Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
@@ -73,6 +80,29 @@ POST /api/plugins/{id}/enable     enable a plugin
 POST /api/plugins/{id}/disable    disable a plugin
 ```
 
+## Marketplace
+
+The **Marketplace** tab merges installed plugins with `marketplace/catalog.json`
+(or a hosted catalog via `APP_MARKETPLACE_URL`): users see what exists, what is
+locked behind a plan, and how to install what's missing. Pasting a signed
+license token in the tab unlocks paid extensions **immediately** — plugin
+routes are license-checked per-request, no restart.
+
+Try the full loop: `extensions/example-marketplace-plugin` ships in the repo
+but is not installed until you run the command the tab shows
+(`uv add {{ pkg_slug }}-plugin-reports`); it then stays locked until a `pro`
+token is activated.
+
+```bash
+uv run {{ cli_name }} marketplace list             # same view, headless
+uv run {{ cli_name }} marketplace unlock <token>   # activate a license token
+```
+
+```
+GET  /api/marketplace             installed + catalog, with lock state
+POST /api/marketplace/unlock      verify + persist a license token, apply now
+```
+
 ## Develop
 
 ```bash
@@ -86,7 +116,8 @@ pnpm install
 pnpm -C apps/frontend dev     # http://127.0.0.1:5173 (proxies /api to the backend)
 ```
 
-## Desktop app (no HTTP server)
+{%- if desktop_framework == 'pywebview' %}
+## Desktop app (pywebview — no HTTP server)
 
 The same UI in a native window; API calls cross a JS bridge into the FastAPI
 app **in the same process** — no sidecar, no port. Data lives in your OS
@@ -101,6 +132,61 @@ uv run {{ cli_name }} build desktop   # PyInstaller onedir bundle into ./dist
 
 Code signing / notarization is intentionally left to you (per-vendor
 certificates); expect OS warnings on unsigned builds.
+{%- elif desktop_framework == 'electron' %}
+## Desktop app (Electron + sidecar backend)
+
+The Electron shell spawns the backend on a free localhost port (it serves the
+API *and* the built web UI — one origin, no CORS) and opens a window on it.
+Data lives in your OS app-data directory.
+
+```bash
+uv run {{ cli_name }} build web       # build the UI once (and after UI changes)
+pnpm install                    # once — installs Electron
+uv run {{ cli_name }} desktop         # native window, dev mode
+uv run {{ cli_name }} desktop --check # headless smoke test of the sidecar
+uv run {{ cli_name }} build desktop   # PyInstaller sidecar + electron-builder → dist/electron
+```
+
+Code signing / notarization is intentionally left to you (per-vendor
+certificates); expect OS warnings on unsigned builds.
+{%- elif desktop_framework == 'tauri' %}
+## Desktop app (Tauri + sidecar backend)
+
+The Tauri (Rust) shell spawns the backend on a free localhost port (it serves
+the API *and* the built web UI — one origin, no CORS) and opens a window on it.
+Data lives in your OS app-data directory. Requires the
+[Rust toolchain](https://rustup.rs).
+
+```bash
+uv run {{ cli_name }} build web       # build the UI once (and after UI changes)
+pnpm install                    # once — installs the Tauri CLI
+uv run {{ cli_name }} desktop         # native window, dev mode (compiles the shell first time)
+uv run {{ cli_name }} desktop --check # headless smoke test of the sidecar
+uv run {{ cli_name }} build desktop   # PyInstaller sidecar + tauri build
+```
+
+Replace the placeholder icons before shipping:
+`pnpm -C apps/desktop-tauri tauri icon your-icon.png`. Code signing /
+notarization is intentionally left to you (per-vendor certificates); expect OS
+warnings on unsigned builds.
+{%- endif %}
+{%- if include_docker %}
+
+## Run the whole stack in Docker
+
+```bash
+uv run {{ cli_name }} stack up        # nginx web on http://localhost:8080 + backend{% if database == 'postgres' %} + postgres{% endif %}
+uv run {{ cli_name }} stack logs      # follow logs        stack ps → health
+uv run {{ cli_name }} stack down      # stop (--volumes wipes data)
+{%- if include_tunnel %}
+uv run {{ cli_name }} stack share     # same stack + a public trycloudflare.com URL
+{%- endif %}
+```
+
+The web UI is served by nginx (`apps/frontend/nginx.conf`), which proxies
+`/api` and `/docs` to the backend. Your `.env` is passed to the backend at
+runtime and never baked into images.
+{%- endif %}
 
 ## Licensing
 

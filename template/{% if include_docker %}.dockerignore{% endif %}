@@ -1,0 +1,16 @@
+# Keep images small and builds reproducible: dependencies are installed inside
+# the image, secrets and local state never enter the build context.
+.git
+.venv
+node_modules
+**/node_modules
+apps/frontend/dist
+site
+build
+dist
+data
+*.db
+.env
+license.key
+license-signing.private
+openapi.json

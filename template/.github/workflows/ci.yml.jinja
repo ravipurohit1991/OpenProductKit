@@ -1,0 +1,62 @@
+name: CI
+
+# NOTE: this file is rendered by Copier. It deliberately avoids GitHub Actions
+# expressions (dollar-brace syntax) so the two template languages never collide.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "{{ python_version }}"
+      - run: uv sync --dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+{%- if desktop_framework == 'pywebview' %}
+      - name: Desktop smoke test (in-process, headless)
+        run: uv run python -m {{ pkg_slug }}_desktop --check
+{%- elif desktop_framework == 'electron' %}
+      - name: Desktop sidecar smoke test (headless)
+        run: uv run python apps/desktop-electron/server.py --check
+{%- elif desktop_framework == 'tauri' %}
+      - name: Desktop sidecar smoke test (headless)
+        run: uv run python apps/desktop-tauri/server.py --check
+{%- endif %}
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - name: Typecheck
+        run: pnpm -C apps/frontend typecheck
+      - name: Build
+        run: pnpm -C apps/frontend build
+{%- if include_docker %}
+
+  stack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the compose file
+        run: docker compose config -q
+      - name: Build the backend image
+        run: docker compose build backend
+{%- endif %}

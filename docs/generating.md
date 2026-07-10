@@ -31,6 +31,10 @@ For released tags, prefer stable semantic-version tags. Copier uses Git metadata
 | `author_name` | `Your Name` | Package metadata |
 | `author_email` | `you@example.com` | Package metadata |
 | `python_version` | `3.12` | Python package metadata and generated targets |
+| `desktop_framework` | `pywebview` | Desktop shell: `pywebview` (in-process, recommended), `electron` or `tauri` (sidecar backend), or `none` — see [Desktop](desktop.md) |
+| `database` | `sqlite` | What the Docker stack runs: `sqlite` or `postgres` (dev/tests always work with SQLite) |
+| `include_docker` | `true` | Generate the Docker stack + `stack` CLI group — see [Deployment](deployment.md) |
+| `include_tunnel` | `true` | Add the Cloudflare quick-tunnel service so `stack share` prints a public URL (asked only if Docker is on) |
 
 ## Generated layout
 
@@ -40,12 +44,15 @@ my-product/
     backend/      FastAPI adapter, SQLModel persistence, Alembic
     cli/          Typer command surface and project task runner
     frontend/     React + Vite UI over generated API types
-    desktop/      pywebview shell and in-process bridge
+    desktop*/     your chosen shell: desktop/ (pywebview),
+                  desktop-electron/ or desktop-tauri/ (sidecar)
   packages/
     core/         Framework-free domain, ports and services
     plugin-api/   Extension contract and registry
     licensing/    License providers and signed token support
-  extensions/     Example plugins
+  extensions/     Example plugins (incl. the on-demand marketplace demo)
+  marketplace/    catalog.json — what the Marketplace tab offers
+  docker-compose.yml  One-command stack (if Docker was selected)
   docs/           Generated product docs
   AGENTS.md       Agent instructions rendered with your project names
   CLAUDE.md       Companion agent instructions

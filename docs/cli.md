@@ -20,16 +20,30 @@
 | `opk lint` | Run ruff checks. |
 | `opk fmt` | Format with ruff. |
 | `opk build web` | Build the production web bundle. |
-| `opk build desktop` | Package the desktop app (PyInstaller onedir) into `./dist`. |
+| `opk build desktop` | Package the desktop app into `./dist` (PyInstaller; plus electron-builder or `tauri build` for the sidecar shells). |
 | `opk openapi [-o path]` | Export the OpenAPI schema. |
 | `opk gen` | Regenerate the typed frontend client from the schema. |
 
 ## Desktop
 
+Generated only when a desktop framework was selected; the surface is identical for pywebview, Electron and Tauri.
+
 | Command | Description |
 | --- | --- |
-| `opk desktop` | Run the desktop app: native window, core in-process. |
-| `opk desktop --check` | Headless smoke test (boot + in-process `/api/health`). |
+| `opk desktop` | Run the desktop app: a native window over the core (in-process or sidecar). |
+| `opk desktop --check` | Headless smoke test (boot + `/api/health`, no window). |
+
+## Docker stack
+
+Generated only when Docker was selected.
+
+| Command | Description |
+| --- | --- |
+| `opk stack up` | Build and start the stack; web UI on `http://localhost:8080`. |
+| `opk stack down [--volumes]` | Stop the stack; `--volumes` wipes its data. |
+| `opk stack logs [service]` | Follow logs. |
+| `opk stack ps` | Services and health. |
+| `opk stack share` | Start the stack + Cloudflare quick tunnel; prints the public URL. |
 
 ## Database
 
@@ -56,6 +70,13 @@
 | `opk plugin install <path>` | Editable-install a local plugin. |
 
 Installed, licensed plugins can also contribute their own commands — for example the bundled CLI plugin adds `opk example-cli greet`.
+
+## Marketplace
+
+| Command | Description |
+| --- | --- |
+| `opk marketplace list` | Installed plugins + catalog items, with lock/install state. |
+| `opk marketplace unlock <token>` | Activate a license token and show the resulting entitlements. |
 
 ## License
 

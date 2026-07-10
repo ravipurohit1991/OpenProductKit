@@ -6,7 +6,7 @@ Your most likely job here: **replace the bundled "Resource Vault" demo domain (p
 
 ## The one rule
 
-**Business logic never leaves `packages/core`.** FastAPI, Typer, React and pywebview are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service. The core imports nothing but the standard library.
+**Business logic never leaves `packages/core`.** FastAPI, Typer, React and the desktop shell are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service. The core imports nothing but the standard library.
 
 ## Layout
 
@@ -18,8 +18,15 @@ Your most likely job here: **replace the bundled "Resource Vault" demo domain (p
 | `apps/backend` | FastAPI adapter; owns SQLModel persistence + Alembic migrations | Implements the core's ports |
 | `apps/cli` | `{{ cli_name }}` Typer CLI: domain commands **and** the task runner / control plane | |
 | `apps/frontend` | React + Vite; talks to the backend through a **generated** typed client | Never hand-write API types |
+{%- if desktop_framework == 'pywebview' %}
 | `apps/desktop` | pywebview shell; dispatches API calls **in-process** (no HTTP server) | Domain-agnostic — new routes just work |
-| `extensions/` | Example plugins (basic route, CLI command, license-gated) | Removable examples |
+{%- elif desktop_framework == 'electron' %}
+| `apps/desktop-electron` | Electron shell; spawns the backend as a localhost sidecar serving API + UI | Domain-agnostic — new routes just work |
+{%- elif desktop_framework == 'tauri' %}
+| `apps/desktop-tauri` | Tauri (Rust) shell; spawns the backend as a localhost sidecar serving API + UI | Domain-agnostic — new routes just work |
+{%- endif %}
+| `extensions/` | Example plugins (basic route, CLI command, license-gated, on-demand marketplace demo) | Removable examples |
+| `marketplace/` | `catalog.json` — extensions offered in the Marketplace tab | Vendor-editable |
 
 ## Commands
 
@@ -36,9 +43,19 @@ pnpm -C apps/frontend build            # typecheck + build the frontend
 uv run {{ cli_name }} gen              # REGENERATE the typed client after ANY API change
 uv run {{ cli_name }} db revision -m "msg"   # autogenerate a migration from model changes
 uv run {{ cli_name }} db migrate       # apply migrations (also auto-applied on app startup)
+{%- if desktop_framework != 'none' %}
 
 uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop   # desktop app (build web first)
 uv run {{ cli_name }} desktop --check  # headless desktop smoke test
+{%- endif %}
+
+uv run {{ cli_name }} marketplace list # extension catalog + lock state
+{%- if include_docker %}
+uv run {{ cli_name }} stack up         # full Docker stack on http://localhost:8080
+{%- if include_tunnel %}
+uv run {{ cli_name }} stack share      # same + a public trycloudflare.com URL
+{%- endif %}
+{%- endif %}
 ```
 
 ## The demo fence
@@ -49,7 +66,7 @@ Every line of demo code carries a `[demo]` marker:
 grep -rn "\[demo\]" packages apps
 ```
 
-That output is the complete inventory of what to replace or trim. Unmarked code is framework: keep it, it works with any domain. Files that are *entirely* demo (delete when replacing): `packages/core/src/{{ pkg_slug }}_core/domain/note.py` and `domain/project.py`, `services/notes.py`, `services/projects.py`, `packages/core/tests/test_notes_service.py`, `apps/backend/src/{{ pkg_slug }}_backend/api/routes/notes.py`, `routes/projects.py`, `routes/export.py`, `adapters/db/repository.py`, `apps/frontend/src/VaultView.tsx`. Files with marked demo *sections* (trim, keep the file): `ports/repository.py`, `errors.py`, `{{ pkg_slug }}_core/__init__.py`, `adapters/db/models.py`, `api/deps.py`, `app.py`, `apps/cli/src/{{ pkg_slug }}_cli/main.py`, `apps/frontend/src/client/hooks.ts`, `App.tsx`, `apps/backend/tests/test_api.py`, `apps/desktop/tests/test_bridge.py`.
+That output is the complete inventory of what to replace or trim. Unmarked code is framework: keep it, it works with any domain. Files that are *entirely* demo (delete when replacing): `packages/core/src/{{ pkg_slug }}_core/domain/note.py` and `domain/project.py`, `services/notes.py`, `services/projects.py`, `packages/core/tests/test_notes_service.py`, `apps/backend/src/{{ pkg_slug }}_backend/api/routes/notes.py`, `routes/projects.py`, `routes/export.py`, `adapters/db/repository.py`, `apps/frontend/src/VaultView.tsx`. Files with marked demo *sections* (trim, keep the file): `ports/repository.py`, `errors.py`, `{{ pkg_slug }}_core/__init__.py`, `adapters/db/models.py`, `api/deps.py`, `app.py`, `apps/cli/src/{{ pkg_slug }}_cli/main.py`, `apps/frontend/src/client/hooks.ts`, `App.tsx`, `apps/backend/tests/test_api.py`{% if desktop_framework == 'pywebview' %}, `apps/desktop/tests/test_bridge.py`{% endif %}.
 
 ## Recipe: add a domain entity end-to-end
 

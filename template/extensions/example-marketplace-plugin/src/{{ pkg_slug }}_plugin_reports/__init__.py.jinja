@@ -1,0 +1,44 @@
+"""A marketplace-distributed extension.
+
+Unlike the other examples, this plugin is *not* a dependency of the root
+project, so a fresh `uv sync` does not install it. It appears in the
+Marketplace tab from `marketplace/catalog.json`; installing it is one command:
+
+    uv add {{ pkg_slug }}-plugin-reports
+
+After that the entry point is discovered like any other plugin, and because it
+requires the "pro" plan, it stays locked until the install is licensed.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from {{ pkg_slug }}_plugin_api import HealthStatus, Plugin, PluginManifest
+
+
+class ReportsPlugin(Plugin):
+    manifest = PluginManifest(
+        id="example.reports",
+        name="Reports (Pro)",
+        version="0.1.0",
+        author="{{ author_name }}",
+        description="Summary reports over your data — installed on demand from the marketplace.",
+        permissions=("network:none",),
+        required_plan="pro",
+    )
+
+    def backend_router(self) -> APIRouter:
+        router = APIRouter(prefix="/api/ext/reports", tags=["ext:reports"])
+
+        @router.get("/ping")
+        def ping() -> dict[str, str]:
+            return {"status": "reports extension installed and licensed"}
+
+        return router
+
+    def health(self) -> HealthStatus:
+        return HealthStatus.ok("ready")
+
+
+PLUGIN = ReportsPlugin()

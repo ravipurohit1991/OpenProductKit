@@ -20,7 +20,7 @@ OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives 
 
 The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
 
-**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [licensing](docs/licensing.md) | [roadmap](docs/roadmap.md)
+**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [deployment](docs/deployment.md) | [roadmap](docs/roadmap.md)
 
 ---
 
@@ -32,6 +32,8 @@ Most templates get you a web app or a desktop shell. OpenProductKit is meant for
 - **Desktop without a sidecar:** the web UI runs in a native window and calls the app in-process, with no hidden HTTP server or port race.
 - **Commercial hooks included:** signed offline license tokens, file/HTTP providers, vendor commands and route/UI gates.
 - **Plugin-ready:** Python entry-point plugins can add backend routes, CLI commands, settings, health checks and admin UI.
+- **A marketplace, not just plugins:** a catalog tab where users install extensions and unlock paid ones with a license token — live, no restart.
+- **One-command deploy:** `stack up` runs nginx + backend (+ PostgreSQL) in Docker; `stack share` puts a public Cloudflare URL on your dev stack.
 - **Generated typed client:** frontend API types come from the backend OpenAPI schema.
 - **Agent-ready rework path:** the demo domain is fenced with `[demo]` markers, and generated projects include `AGENTS.md` and `CLAUDE.md`.
 
@@ -78,11 +80,13 @@ If you changed `cli_name` during generation, replace `opk` with your generated c
 | --- | --- |
 | Core | Framework-free Python domain package with models, ports, services and tests |
 | Backend | FastAPI, SQLModel persistence, Alembic migrations and OpenAPI |
-| CLI | Typer command surface for dev, DB, builds, docs, plugins and licensing |
+| CLI | Typer command surface for dev, DB, builds, docs, plugins, licensing and the Docker stack |
 | Frontend | React + Vite UI over generated TypeScript API types |
-| Desktop | pywebview shell using the same frontend and an in-process app bridge |
+| Desktop | Your pick of **pywebview** (in-process), **Electron** or **Tauri** (sidecar) — one CLI surface for all |
 | Licensing | Dev stub, signed offline tokens, file provider, HTTP provider and feature gates |
 | Plugins | Entry-point plugin SDK with backend, CLI, settings, health and license support |
+| Marketplace | Catalog + unlock-with-token flow: users see, install and unlock paid extensions |
+| Deployment | `stack up` Docker stack (nginx + backend + optional PostgreSQL), `stack share` Cloudflare tunnel |
 | Docs | MkDocs Material site with GitHub Pages and Read the Docs config |
 | CI | Linux and Windows checks for backend, frontend and generated project behavior |
 
@@ -95,8 +99,9 @@ packages/licensing   Entitlement: dev stub, signed offline tokens, file/HTTP pro
 apps/backend         FastAPI adapter. Owns SQLModel persistence and Alembic migrations.
 apps/cli             Typer CLI and project control plane.
 apps/frontend        React + Vite UI over a generated OpenAPI client.
-apps/desktop         pywebview shell: same UI, same app, one process.
-extensions/          Example plugins: basic, CLI and paid/license-gated.
+apps/desktop*        Your chosen shell: pywebview (in-process) or Electron/Tauri (sidecar).
+extensions/          Example plugins: basic, CLI, paid/license-gated, on-demand marketplace demo.
+marketplace/         catalog.json for the Marketplace tab.
 ```
 
 The rule that keeps the template portable:
@@ -130,16 +135,19 @@ Shipped:
 - Hexagonal core, FastAPI backend, Typer CLI, React UI and CI
 - Resource Vault demo through core, backend, CLI, web and desktop
 - Generated OpenAPI TypeScript client
-- Plugin manager and three example plugins
+- Plugin manager and example plugins
 - Signed offline licensing and HTTP license provider
-- pywebview desktop shell with in-process app calls
+- Desktop shell of your choice: pywebview (in-process), Electron or Tauri (sidecar)
+- Marketplace: extension catalog + unlock-with-license-token, applied without restart
+- One-command Docker stack (nginx + backend + optional PostgreSQL) and `stack share` Cloudflare quick tunnel
 - Agent-ready rework path with `[demo]` markers and generated agent instructions
 - MkDocs Material docs site
 
 Next:
 
-- Runtime plugin loading with sandboxing and permissions
-- Frozen desktop plugin packaging
+- Payments hook recipe (checkout webhook → `license issue` → email token)
+- Runtime plugin installation from the UI, sandboxing and permissions
+- Frozen desktop plugin packaging, auto-update and release CI
 - Generated-client drift gate in CI
 
 See the [roadmap](docs/roadmap.md) for details.

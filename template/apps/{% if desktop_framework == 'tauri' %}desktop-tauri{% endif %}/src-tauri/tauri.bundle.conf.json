@@ -1,0 +1,6 @@
+{
+  "$comment": "Overlay applied by `build desktop` (tauri build --config …): bundles the PyInstaller sidecar. Kept out of the base config so `tauri dev` works before the sidecar was ever built.",
+  "bundle": {
+    "externalBin": ["binaries/server"]
+  }
+}

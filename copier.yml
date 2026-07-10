@@ -10,6 +10,27 @@ _message_after_copy: |
     uv run {{ cli_name }} hello    # smoke test the CLI
     uv run {{ cli_name }} dev      # start the API on http://127.0.0.1:8000
     pnpm install && pnpm -C apps/frontend dev   # start the web UI
+  {%- if include_docker %}
+
+  Run the whole stack in Docker (backend + web{% if database == 'postgres' %} + postgres{% endif %}):
+    uv run {{ cli_name }} stack up       # http://localhost:8080
+  {%- if include_tunnel %}
+    uv run {{ cli_name }} stack share    # same, plus a public trycloudflare.com URL
+  {%- endif %}
+  {%- endif %}
+  {%- if desktop_framework == 'pywebview' %}
+
+  Desktop app (pywebview, in-process):
+    uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
+  {%- elif desktop_framework == 'electron' %}
+
+  Desktop app (Electron shell + sidecar backend):
+    uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
+  {%- elif desktop_framework == 'tauri' %}
+
+  Desktop app (Tauri shell + sidecar backend — needs the Rust toolchain):
+    uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
+  {%- endif %}
 
 project_name:
   type: str
@@ -50,3 +71,32 @@ python_version:
   choices:
     - "3.12"
     - "3.13"
+
+desktop_framework:
+  type: str
+  help: Desktop shell for the product
+  default: pywebview
+  choices:
+    "pywebview — Python-native window, core called in-process, packaged with PyInstaller (recommended)": pywebview
+    "Electron — Chromium shell over a sidecar backend (JS ecosystem, biggest download)": electron
+    "Tauri — Rust shell over a sidecar backend (smallest binaries, needs the Rust toolchain)": tauri
+    "None — web + CLI only": none
+
+database:
+  type: str
+  help: Database for the deployed stack (local dev and tests always work out of the box with SQLite)
+  default: sqlite
+  choices:
+    "SQLite — zero-config single file (recommended to start; you can switch later)": sqlite
+    "PostgreSQL — runs as a service in the Docker stack": postgres
+
+include_docker:
+  type: bool
+  help: Ship a Docker stack (backend + nginx web server{% if database == 'postgres' %} + postgres{% endif %}) with one-command launch?
+  default: true
+
+include_tunnel:
+  type: bool
+  help: Include a Cloudflare quick-tunnel service so `stack share` can expose your dev stack on a public URL?
+  default: true
+  when: "{{ include_docker }}"
