@@ -1,0 +1,31 @@
+{
+  "name": "{{ project_slug }}-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron shell over the {{ project_name }} sidecar backend.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.example.{{ pkg_slug }}",
+    "productName": "{{ project_name }}",
+    "directories": {
+      "output": "../../dist/electron"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../dist/{{ project_slug }}-server",
+        "to": "server"
+      }
+    ]
+  }
+}

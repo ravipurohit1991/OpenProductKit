@@ -101,6 +101,41 @@ export function usePlugins() {
   });
 }
 
+// --- marketplace (framework — keep) -------------------------------------------
+
+export type MarketplaceItem = components["schemas"]["MarketplaceItemOut"];
+
+export function useMarketplace() {
+  return useQuery({
+    queryKey: ["marketplace"],
+    queryFn: async () => {
+      const { data, error } = await client.GET("/api/marketplace");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
+// Activate a signed license token. On success every gate re-reads entitlements,
+// so locked plugins and features unlock without a restart.
+export function useUnlockLicense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const { data, error } = await client.POST("/api/marketplace/unlock", {
+        body: { token },
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["license"] });
+      qc.invalidateQueries({ queryKey: ["plugins"] });
+      qc.invalidateQueries({ queryKey: ["marketplace"] });
+    },
+  });
+}
+
 // --- license (framework — keep) ------------------------------------------------
 
 export type LicenseStatus = components["schemas"]["LicenseOut"];

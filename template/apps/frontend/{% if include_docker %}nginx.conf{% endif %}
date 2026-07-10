@@ -1,0 +1,34 @@
+# Serves the built web UI and reverse-proxies the API to the backend service.
+# This file is baked into the web image (see apps/frontend/Dockerfile) and is
+# also a reasonable starting point for a real server deployment.
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location /api/ {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # FastAPI's interactive docs, straight from the backend.
+    location = /docs {
+        proxy_pass http://backend:8000;
+    }
+    location = /openapi.json {
+        proxy_pass http://backend:8000;
+    }
+
+    # Single-page app: anything that is not a file falls back to index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

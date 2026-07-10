@@ -142,6 +142,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/marketplace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Marketplace */
+        get: operations["list_marketplace_api_marketplace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/marketplace/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock
+         * @description Verify a signed license token, persist it and apply it immediately.
+         */
+        post: operations["unlock_api_marketplace_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export": {
         parameters: {
             query?: never;
@@ -249,6 +286,39 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** MarketplaceItemOut */
+        MarketplaceItemOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: string;
+            /** Description */
+            description: string;
+            /** Required Plan */
+            required_plan: string | null;
+            /**
+             * Homepage
+             * @default
+             */
+            homepage: string;
+            /**
+             * Install Hint
+             * @default
+             */
+            install_hint: string;
+            /** Installed */
+            installed: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Entitled */
+            entitled: boolean;
+            /** Active */
+            active: boolean;
+            /** Source */
+            source: string;
+        };
         /** NoteIn */
         NoteIn: {
             /** Project Id */
@@ -319,6 +389,22 @@ export interface components {
             name: string;
             /** Created At */
             created_at: string;
+        };
+        /** UnlockIn */
+        UnlockIn: {
+            /** Token */
+            token: string;
+        };
+        /** UnlockOut */
+        UnlockOut: {
+            /** Plan */
+            plan: string;
+            /** Licensee */
+            licensee: string;
+            /** Features */
+            features: string[];
+            /** Message */
+            message: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -622,6 +708,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LicenseOut"];
+                };
+            };
+        };
+    };
+    list_marketplace_api_marketplace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceItemOut"][];
+                };
+            };
+        };
+    };
+    unlock_api_marketplace_unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnlockIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnlockOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

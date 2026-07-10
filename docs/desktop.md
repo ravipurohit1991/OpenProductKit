@@ -1,10 +1,24 @@
 # Desktop
 
-The desktop app is the hexagonal thesis cashed in: **the same product in a
-native window, with the core called in-process. No HTTP server, no port, no
-sidecar process.**
+A Copier question picks the desktop shell — the CLI surface stays identical
+(`opk desktop`, `opk desktop --check`, `opk build desktop`) whichever you
+choose, and the React UI is byte-for-byte the same web build in all of them.
 
-## How it works
+| | pywebview (default) | Electron | Tauri |
+| --- | --- | --- | --- |
+| Architecture | core called **in-process**, no server at all | sidecar backend on localhost | sidecar backend on localhost |
+| Runtime | the OS webview | bundled Chromium | the OS webview |
+| Extra toolchain | none | none | Rust (rustup) |
+| Bundle size | small | largest | smallest |
+| Packaging | PyInstaller | PyInstaller sidecar + electron-builder | PyInstaller sidecar + `tauri build` |
+
+Pick **pywebview** unless you have a concrete reason not to: it is the lightest
+to build and the purest expression of the hexagonal core. Pick **Electron** if
+you want the Chromium-everywhere rendering guarantee and its mature ecosystem
+(auto-update, deep OS integrations). Pick **Tauri** for the smallest installers
+if the Rust toolchain doesn't scare you.
+
+## pywebview — in-process, no server
 
 ```mermaid
 flowchart LR
@@ -19,30 +33,57 @@ flowchart LR
   build** the browser gets.
 - The typed client detects it is running from `file://` and swaps its `fetch`
   for a bridge call. Every request is dispatched to the FastAPI app **in the
-  same process** through an in-process ASGI client — routes, plugins, license
-  gates and migrations all behave identically to the web app.
-- Data lives in the platform's per-user app-data directory (via
-  `platformdirs`), not the working directory; the license file too.
+  same process** — routes, plugins, license gates and migrations all behave
+  identically to the web app.
+- No socket, no port, no sidecar to babysit or sign separately — possible
+  because the core never assumed HTTP in the first place.
 
-Why not a sidecar? Bundling a second FastAPI process next to a shell means
-port races, orphaned processes, firewall prompts and two binaries to sign.
-Calling the core in-process deletes that whole failure class — which is only
-possible because the core never assumed HTTP in the first place.
+## Electron & Tauri — a window over a sidecar
+
+```mermaid
+flowchart LR
+    SHELL[Shell process<br/>Electron main.js / Tauri main.rs] -- "spawn on a free port" --> SIDE[sidecar server<br/>FastAPI serving /api AND the web UI]
+    SHELL -- "wait for /api/health" --> SIDE
+    SHELL -- "open window on http://127.0.0.1:PORT" --> WIN[native window]
+```
+
+Both shells follow the same contract, implemented in ~100 lines each:
+
+1. pick a free localhost port,
+2. spawn the **sidecar server** (`apps/desktop-electron/server.py` or
+   `apps/desktop-tauri/server.py` — the FastAPI backend, which also serves the
+   built web UI at `/`),
+3. wait until it is healthy,
+4. open the window on `http://127.0.0.1:<port>/` — one origin, so there is
+   **no CORS, no `file://` quirks, no custom protocol**,
+5. kill the sidecar on exit.
+
+In dev the sidecar runs from source through `uv`; packaged builds run a
+PyInstaller bundle of it (Electron: `extraResources`; Tauri: an external
+binary next to the app executable). Data still lives in the platform's
+per-user app-data directory, license file included.
 
 ## Running and packaging
 
 ```bash
 opk build web        # once, or after UI changes
 opk desktop          # native window, dev mode
-opk desktop --check  # headless smoke test: boot + in-process /api/health
-opk build desktop    # PyInstaller onedir bundle into ./dist/<project>/
+opk desktop --check  # headless smoke test: boot + /api/health, no window
+opk build desktop    # installer/bundle into ./dist
 ```
 
-The bundle ships the web build and the Alembic migrations as data files; first
-launch creates and migrates the user's database automatically.
+Per framework, `build desktop` runs:
+
+- **pywebview** — PyInstaller onedir bundle (web build + migrations as data files).
+- **Electron** — PyInstaller server bundle, then `electron-builder` (output in
+  `dist/electron`).
+- **Tauri** — PyInstaller onefile server, copied to
+  `src-tauri/binaries/server-<target-triple>`, then `tauri build --config
+  src-tauri/tauri.bundle.conf.json`. Replace the placeholder icons with
+  `pnpm -C apps/desktop-tauri tauri icon your-icon.png` before shipping.
 
 !!! warning "Code signing is documented, not solved"
-    The bundle is unsigned. macOS Gatekeeper and Windows SmartScreen will warn
+    Bundles are unsigned. macOS Gatekeeper and Windows SmartScreen will warn
     users until you sign/notarize with your own certificates (`signtool` /
     `codesign` + `notarytool`). This is a per-vendor, per-OS commercial process
     that a template cannot do for you — budget for it before shipping.

@@ -26,6 +26,10 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `author_name` | `str` | Package author metadata |
 | `author_email` | `str` | Package author metadata |
 | `python_version` | choice | `3.12` or `3.13` |
+| `desktop_framework` | choice | `pywebview` (default), `electron`, `tauri` or `none`; selects which desktop app directory (if any) is generated and shapes the CLI's `desktop`/`build desktop` commands |
+| `database` | choice | `sqlite` (default) or `postgres`; shapes the Docker stack, backend dependencies and `.env.example` |
+| `include_docker` | bool | Generates `docker-compose.yml`, Dockerfiles, `nginx.conf`, `.dockerignore` and the `stack` CLI group |
+| `include_tunnel` | bool | Adds the cloudflared quick-tunnel service and `stack share` (asked only when Docker is on) |
 
 ## Generated Python packages
 
@@ -34,7 +38,7 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `<pkg_slug>_core` | Domain models, ports, services and core errors |
 | `<pkg_slug>_backend` | FastAPI app, SQLModel persistence, routes, migrations and adapter wiring |
 | `<pkg_slug>_cli` | Typer CLI and development control plane |
-| `<pkg_slug>_desktop` | pywebview shell and in-process request bridge |
+| `<pkg_slug>_desktop` | pywebview shell and in-process request bridge (only with `desktop_framework=pywebview`; Electron/Tauri generate `apps/desktop-electron/` / `apps/desktop-tauri/` with a `server.py` sidecar instead) |
 | `<pkg_slug>_plugin_api` | Plugin manifest, contract, health and registry helpers |
 | `<pkg_slug>_licensing` | License providers, token signing and plan resolution |
 
@@ -57,6 +61,7 @@ In browser mode, requests go to the backend over HTTP. In desktop mode, the same
 | CLI command | `apps/cli/src/<pkg_slug>_cli/main.py` |
 | Frontend view | `apps/frontend/src/` |
 | Plugin | `extensions/*` or a separate package exposing `<pkg_slug>.plugins` entry points |
+| Marketplace catalog | `marketplace/catalog.json` (or a hosted URL via `APP_MARKETPLACE_URL`) |
 
 ## Demo markers
 

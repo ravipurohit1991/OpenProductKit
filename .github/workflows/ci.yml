@@ -76,6 +76,66 @@ jobs:
         working-directory: ${{ runner.temp }}/gen
         run: pnpm -C apps/frontend build
 
+  # Non-default template answers: each variant must generate, install, lint and
+  # test; desktop variants also smoke-test their sidecar and shell sources.
+  variants:
+    name: variant (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: electron
+            answers: "-d desktop_framework=electron"
+          - name: tauri
+            answers: "-d desktop_framework=tauri"
+          - name: postgres-nodesktop
+            answers: "-d desktop_framework=none -d database=postgres"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Generate a project from the template
+        run: uvx copier copy --defaults --trust --vcs-ref HEAD ${{ matrix.answers }} . "${{ runner.temp }}/gen"
+
+      - name: Install workspace, lint, test
+        working-directory: ${{ runner.temp }}/gen
+        run: |
+          uv sync --dev
+          uv run ruff check .
+          uv run pytest
+
+      - name: Validate the compose file
+        working-directory: ${{ runner.temp }}/gen
+        run: docker compose config -q
+
+      - name: Sidecar smoke test (headless)
+        if: matrix.name == 'electron' || matrix.name == 'tauri'
+        working-directory: ${{ runner.temp }}/gen
+        run: uv run python apps/desktop-${{ matrix.name }}/server.py --check
+
+      - name: Electron shell — syntax check
+        if: matrix.name == 'electron'
+        working-directory: ${{ runner.temp }}/gen
+        run: node --check apps/desktop-electron/main.js
+
+      - name: Tauri shell — cargo check
+        if: matrix.name == 'tauri'
+        working-directory: ${{ runner.temp }}/gen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
+          # tauri-build validates that frontendDist exists; a stub is enough
+          # because the window loads the sidecar URL, not bundled assets.
+          mkdir -p apps/frontend/dist && touch apps/frontend/dist/index.html
+          cargo check --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml
+
   docs:
     name: docs (build strict)
     runs-on: ubuntu-latest

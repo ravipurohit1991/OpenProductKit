@@ -1,0 +1,95 @@
+// The {{ project_name }} desktop shell (Electron).
+//
+// The shell owns no business logic: it spawns the sidecar server (the FastAPI
+// backend serving both the API and the built web UI) on a free localhost port,
+// waits for /api/health, and opens a window on it. One origin, no CORS, no
+// file:// quirks. Dev runs the server from source via uv; packaged builds run
+// the PyInstaller bundle shipped in resources/server.
+
+const { app, BrowserWindow, dialog } = require("electron");
+const { spawn } = require("node:child_process");
+const net = require("node:net");
+const http = require("node:http");
+const path = require("node:path");
+const fs = require("node:fs");
+
+const WINDOW = { width: 1100, height: 760 };
+let serverProcess = null;
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+    srv.on("error", reject);
+  });
+}
+
+function serverCommand(port) {
+  if (app.isPackaged) {
+    const exe = process.platform === "win32" ? ".exe" : "";
+    const bin = path.join(process.resourcesPath, "server", `{{ project_slug }}-server${exe}`);
+    return { command: bin, args: ["--port", String(port)], cwd: path.dirname(bin) };
+  }
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const dist = path.join(repoRoot, "apps", "frontend", "dist", "index.html");
+  if (!fs.existsSync(dist)) {
+    throw new Error(`Web build not found at ${dist}. Run: {{ cli_name }} build web`);
+  }
+  return {
+    command: "uv",
+    args: ["run", "python", path.join(__dirname, "server.py"), "--port", String(port)],
+    cwd: repoRoot,
+  };
+}
+
+function waitForHealth(port, timeoutMs = 30000) {
+  const url = `http://127.0.0.1:${port}/api/health`;
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      http
+        .get(url, (res) => {
+          res.resume();
+          if (res.statusCode === 200) return resolve();
+          retry();
+        })
+        .on("error", retry);
+    };
+    const retry = () => {
+      if (serverProcess && serverProcess.exitCode !== null) {
+        return reject(new Error(`Sidecar server exited with code ${serverProcess.exitCode}`));
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        return reject(new Error(`Sidecar server did not become healthy at ${url}`));
+      }
+      setTimeout(poll, 200);
+    };
+    poll();
+  });
+}
+
+async function start() {
+  const port = await freePort();
+  const { command, args, cwd } = serverCommand(port);
+  serverProcess = spawn(command, args, { cwd, windowsHide: true, stdio: "inherit" });
+  await waitForHealth(port);
+
+  const win = new BrowserWindow({ ...WINDOW, title: "{{ project_name }}" });
+  win.removeMenu?.();
+  await win.loadURL(`http://127.0.0.1:${port}/`);
+}
+
+app.whenReady().then(() =>
+  start().catch((err) => {
+    dialog.showErrorBox("{{ project_name }}", String(err.message || err));
+    app.quit();
+  }),
+);
+
+app.on("window-all-closed", () => app.quit());
+app.on("will-quit", () => {
+  if (serverProcess && serverProcess.exitCode === null) serverProcess.kill();
+});

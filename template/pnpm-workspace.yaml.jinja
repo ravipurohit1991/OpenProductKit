@@ -1,0 +1,7 @@
+packages:
+  - "apps/frontend"
+{%- if desktop_framework == 'electron' %}
+  - "apps/desktop-electron"
+{%- elif desktop_framework == 'tauri' %}
+  - "apps/desktop-tauri"
+{%- endif %}

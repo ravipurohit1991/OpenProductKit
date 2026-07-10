@@ -12,6 +12,13 @@ dependencies = [
     "sqlmodel>=0.0.22",
     "pydantic-settings>=2.4",
     "alembic>=1.13",
+{%- if database == 'postgres' %}
+    "psycopg[binary]>=3.2",
+{%- endif %}
+{%- if desktop_framework in ('electron', 'tauri') %}
+    # Per-user data dir for the desktop sidecar server (see apps/desktop-*/server.py).
+    "platformdirs>=4",
+{%- endif %}
 ]
 
 [tool.uv.sources]

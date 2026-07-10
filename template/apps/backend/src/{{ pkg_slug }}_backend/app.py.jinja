@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api.routes.export import router as export_router  # [demo]
 from .api.routes.license import router as license_router
+from .api.routes.marketplace import router as marketplace_router
 from .api.routes.notes import router as notes_router  # [demo]
 from .api.routes.plugins import router as plugins_router
 from .api.routes.projects import router as projects_router  # [demo]
@@ -45,17 +48,26 @@ def create_app() -> FastAPI:
     app.include_router(notes_router)  # [demo]
     app.include_router(plugins_router)
     app.include_router(license_router)
+    app.include_router(marketplace_router)
     app.include_router(export_router)  # [demo]
-    # Mount routes contributed by installed, licensed plugins.
+    # Mount routes contributed by installed plugins (gated per-request).
     mount_plugin_routers(app)
-
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def index() -> str:
-        return _INDEX
 
     @app.get("/api/health", tags=["system"])
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    # When a web build exists, serve it at "/": one process delivers the whole
+    # product. Desktop sidecar shells and single-container deploys rely on this;
+    # in dev the Vite server is the nicer front door and this stays dormant.
+    web_dist = Path(settings.web_dist)
+    if (web_dist / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=web_dist, html=True), name="web")
+    else:
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def index() -> str:
+            return _INDEX
 
     return app
 

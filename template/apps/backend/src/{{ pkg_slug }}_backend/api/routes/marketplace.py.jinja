@@ -1,0 +1,144 @@
+"""The marketplace API: browse available extensions and unlock paid ones.
+
+The marketplace merges two sources into one list:
+
+- **installed plugins** — discovered via entry points (same data as /api/plugins)
+- **the catalog** — extensions the vendor offers but the install may not have
+  yet, read from `marketplace/catalog.json` (or APP_MARKETPLACE_URL when set)
+
+Unlocking is licensing, not payments: POST /unlock takes a signed license token
+(bought on your website, sent by email — however you sell), verifies it offline
+against the vendor public key, persists it, and every gate in the app re-reads
+entitlements immediately. Wire a payment provider later and have its webhook
+call `{{ cli_name }} license issue` — the app side is already done.
+"""
+
+from __future__ import annotations
+
+import json
+import urllib.request
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from {{ pkg_slug }}_licensing import verify_token
+
+from ... import licensing
+from ...plugins import build_registry
+from ...settings import settings
+from ..deps import SessionDep
+
+router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
+
+
+class MarketplaceItemOut(BaseModel):
+    id: str
+    name: str
+    version: str
+    description: str
+    required_plan: str | None
+    homepage: str = ""
+    #: Shell command that installs the extension, shown for catalog-only items.
+    install_hint: str = ""
+    installed: bool
+    enabled: bool
+    entitled: bool
+    active: bool
+    source: str  # "installed" | "catalog"
+
+
+class UnlockIn(BaseModel):
+    token: str
+
+
+class UnlockOut(BaseModel):
+    plan: str
+    licensee: str
+    features: list[str]
+    message: str
+
+
+def _load_catalog() -> list[dict]:
+    """Read the catalog from the vendor URL or the local file; never raise."""
+    if settings.marketplace_url:
+        try:
+            with urllib.request.urlopen(settings.marketplace_url, timeout=5) as resp:  # noqa: S310
+                return json.load(resp).get("items", [])
+        except (OSError, ValueError):
+            return []
+    path = Path(settings.marketplace_catalog)
+    if not path.is_file():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("items", [])
+    except (OSError, ValueError):
+        return []
+
+
+@router.get("", response_model=list[MarketplaceItemOut])
+def list_marketplace(session: SessionDep) -> list[MarketplaceItemOut]:
+    catalog = {str(item.get("id", "")): item for item in _load_catalog() if item.get("id")}
+    provider = licensing.get_license_provider()
+
+    items: list[MarketplaceItemOut] = []
+    for view in build_registry(session).all():
+        manifest = view.manifest
+        extra = catalog.pop(manifest.id, {})
+        items.append(
+            MarketplaceItemOut(
+                id=manifest.id,
+                name=manifest.name,
+                version=manifest.version,
+                description=manifest.description,
+                required_plan=manifest.required_plan,
+                homepage=str(extra.get("homepage", "")),
+                installed=True,
+                enabled=view.enabled,
+                entitled=view.entitled,
+                active=view.active,
+                source="installed",
+            )
+        )
+    for item in catalog.values():
+        required_plan = item.get("required_plan") or None
+        items.append(
+            MarketplaceItemOut(
+                id=str(item["id"]),
+                name=str(item.get("name", item["id"])),
+                version=str(item.get("version", "")),
+                description=str(item.get("description", "")),
+                required_plan=required_plan,
+                homepage=str(item.get("homepage", "")),
+                install_hint=str(item.get("install_hint", "")),
+                installed=False,
+                enabled=False,
+                entitled=provider.is_entitled(required_plan),
+                active=False,
+                source="catalog",
+            )
+        )
+    return sorted(items, key=lambda item: item.id)
+
+
+@router.post("/unlock", response_model=UnlockOut)
+def unlock(payload: UnlockIn) -> UnlockOut:
+    """Verify a signed license token, persist it and apply it immediately."""
+    token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Empty license token.")
+    info = verify_token(token, settings.license_public_key)
+    if not info.valid:
+        raise HTTPException(status_code=400, detail=info.message or "Invalid license token.")
+    dest = Path(settings.license_file)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(token + "\n", encoding="utf-8")
+    # The provider is resolved once and cached; drop the cache so every plan
+    # and feature gate sees the new license on the next request.
+    licensing.get_license_provider.cache_clear()
+    return UnlockOut(
+        plan=info.plan,
+        licensee=info.licensee,
+        features=list(info.features),
+        message=f"License for '{info.licensee}' activated ({info.plan} plan).",
+    )

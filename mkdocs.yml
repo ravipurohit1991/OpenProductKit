@@ -45,6 +45,8 @@ nav:
       - Desktop app: desktop.md
       - Plugins: plugins.md
       - Licensing: licensing.md
+      - Marketplace: marketplace.md
+      - Deployment: deployment.md
   - Reference:
       - CLI reference: cli.md
       - Template reference: template-reference.md

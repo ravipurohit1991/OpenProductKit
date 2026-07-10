@@ -7,31 +7,46 @@ dependencies = [
     "{{ pkg_slug }}-core",
     "{{ pkg_slug }}-backend",
     "{{ pkg_slug }}-cli",
+{%- if desktop_framework == 'pywebview' %}
     # Desktop shell — drop this line for server-only deployments.
     "{{ pkg_slug }}-desktop",
+{%- endif %}
     # Example plugins — installed so they are discovered via entry points.
     # Remove these three lines to ship without the bundled examples.
     "{{ pkg_slug }}-plugin-basic",
     "{{ pkg_slug }}-plugin-cli",
     "{{ pkg_slug }}-plugin-paid",
+    # NOTE: {{ pkg_slug }}-plugin-reports is intentionally NOT installed — it is
+    # the marketplace demo. Install it on demand: uv add {{ pkg_slug }}-plugin-reports
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "apps/backend", "apps/cli", "apps/desktop", "extensions/*"]
+members = [
+    "packages/*",
+    "apps/backend",
+    "apps/cli",
+{%- if desktop_framework == 'pywebview' %}
+    "apps/desktop",
+{%- endif %}
+    "extensions/*",
+]
 
 [tool.uv.sources]
 "{{ pkg_slug }}-core" = { workspace = true }
 "{{ pkg_slug }}-backend" = { workspace = true }
 "{{ pkg_slug }}-cli" = { workspace = true }
+{%- if desktop_framework == 'pywebview' %}
 "{{ pkg_slug }}-desktop" = { workspace = true }
+{%- endif %}
 "{{ pkg_slug }}-plugin-api" = { workspace = true }
 "{{ pkg_slug }}-licensing" = { workspace = true }
 "{{ pkg_slug }}-plugin-basic" = { workspace = true }
 "{{ pkg_slug }}-plugin-cli" = { workspace = true }
 "{{ pkg_slug }}-plugin-paid" = { workspace = true }
+"{{ pkg_slug }}-plugin-reports" = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -43,9 +58,11 @@ docs = [
     "mkdocs-material>=9.5",
     "pymdown-extensions>=10.7",
 ]
+{%- if desktop_framework != 'none' %}
 build = [
     "pyinstaller>=6.10",
 ]
+{%- endif %}
 
 [tool.ruff]
 line-length = 100
@@ -60,12 +77,15 @@ known-first-party = [
     "{{ pkg_slug }}_core",
     "{{ pkg_slug }}_backend",
     "{{ pkg_slug }}_cli",
+{%- if desktop_framework == 'pywebview' %}
     "{{ pkg_slug }}_desktop",
+{%- endif %}
     "{{ pkg_slug }}_plugin_api",
     "{{ pkg_slug }}_licensing",
     "{{ pkg_slug }}_plugin_basic",
     "{{ pkg_slug }}_plugin_cli",
     "{{ pkg_slug }}_plugin_paid",
+    "{{ pkg_slug }}_plugin_reports",
 ]
 
 [tool.ruff.lint.flake8-bugbear]

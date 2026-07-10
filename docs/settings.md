@@ -12,8 +12,11 @@ Generated OpenProductKit projects use environment variables prefixed with `APP_`
 | `APP_LICENSE_TOKEN` | Signed license token supplied directly | unset |
 | `APP_LICENSE_FILE` | Path to a signed license token file | `license.key` |
 | `APP_LICENSE_URL` | HTTP license validation endpoint | unset |
+| `APP_WEB_DIST` | Directory with the built web UI; served at `/` when it exists | `apps/frontend/dist` |
+| `APP_MARKETPLACE_CATALOG` | Local marketplace catalog file | `marketplace/catalog.json` |
+| `APP_MARKETPLACE_URL` | Hosted catalog URL (replaces the local file when set) | unset |
 
-Desktop mode sets `APP_DATABASE_URL` and `APP_LICENSE_FILE` to platform-specific app-data paths when they are not already set.
+Desktop mode sets `APP_DATABASE_URL` and `APP_LICENSE_FILE` to platform-specific app-data paths when they are not already set (the sidecar shells also set `APP_WEB_DIST`).
 
 ## License resolution
 
@@ -32,8 +35,10 @@ The frontend's product name is generated into `apps/frontend/src/config.ts`.
 
 The API client chooses its transport at runtime:
 
-- browser mode uses HTTP
-- desktop mode uses the pywebview bridge
+- browser mode uses HTTP (same origin, or the Vite dev proxy)
+- the pywebview desktop shell uses the in-process JS bridge
+- the Electron/Tauri shells load the UI *from* the sidecar backend, so plain
+  same-origin HTTP applies with no special casing
 
 ## Copier answers
 
