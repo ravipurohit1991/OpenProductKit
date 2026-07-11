@@ -1,0 +1,101 @@
+"""The {{ project_name }} desktop shell — native Qt widgets, no web view.
+
+One process, no HTTP: the window calls the same core services the API and the
+CLI use, against the same SQLModel repositories. Qt never leaks the other way —
+`packages/core` stays importable headless, and core events reach widgets
+through the dispatcher installed in `run()` (see `qt_dispatcher.py`).
+
+Run it with `{{ cli_name }} desktop`; package it with `{{ cli_name }} build desktop`.
+`--check` boots the core + database headless (PySide6 is never imported) so CI
+can smoke-test the desktop wiring without a display.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+from platformdirs import user_data_dir
+
+WINDOW_TITLE = "{{ project_name }}"
+DATA_DIR_NAME = "{{ project_slug }}"
+
+
+def prepare_environment() -> Path:
+    """Point the app at a per-user data directory (database, license file).
+
+    Must run before the backend settings module is imported, which is why the
+    backend imports below live inside functions.
+    """
+    data_dir = Path(user_data_dir(DATA_DIR_NAME, appauthor=False))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = (data_dir / "app.db").as_posix()
+    os.environ.setdefault("APP_DATABASE_URL", f"sqlite:///{db_path}")
+    os.environ.setdefault("APP_LICENSE_FILE", str(data_dir / "license.key"))
+    return data_dir
+
+
+def check_headless() -> int:
+    """Exercise the desktop app's seams without a window (or PySide6 import)."""
+    from sqlmodel import Session
+
+    from {{ pkg_slug }}_backend.adapters.db.engine import engine
+    from {{ pkg_slug }}_backend.adapters.db.repository import SqlProjectRepository  # [demo]
+    from {{ pkg_slug }}_backend.db import upgrade_head
+    from {{ pkg_slug }}_backend.licensing import get_license_provider
+    from {{ pkg_slug }}_core.services.projects import ProjectService  # [demo]
+
+    upgrade_head()
+    with Session(engine) as session:
+        count = len(ProjectService(SqlProjectRepository(session)).list())  # [demo]
+    info = get_license_provider().info()
+    print(f"desktop check: OK projects={count} license={info.plan} ({info.source})")
+    return 0
+
+
+def run(check: bool = False) -> int:
+    prepare_environment()
+    if check:
+        return check_headless()
+
+    # Deferred: everything Qt stays out of the headless path above.
+    from PySide6.QtWidgets import QApplication
+
+    # Absolute imports: this file doubles as the PyInstaller entry script,
+    # where relative imports have no parent package.
+    from {{ pkg_slug }}_backend.db import upgrade_head
+    from {{ pkg_slug }}_core.events import set_event_dispatcher
+    from {{ pkg_slug }}_desktop_qt.qt_dispatcher import QtEventDispatcher
+    from {{ pkg_slug }}_desktop_qt.vault_window import VaultWindow  # [demo]
+
+    upgrade_head()
+
+    app = QApplication(sys.argv)
+    app.setApplicationName(WINDOW_TITLE)
+
+    # Core events emitted from any thread now land on the Qt main thread.
+    dispatcher = QtEventDispatcher()
+    set_event_dispatcher(dispatcher.dispatch)
+    try:
+        window = VaultWindow()  # [demo] replace with your main window
+        window.show()
+        return app.exec()
+    finally:
+        set_event_dispatcher(None)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=f"Run the {WINDOW_TITLE} desktop app.")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Boot the core + database headless, exit (no window, no Qt import).",
+    )
+    args = parser.parse_args()
+    raise SystemExit(run(check=args.check))
+
+
+if __name__ == "__main__":
+    main()

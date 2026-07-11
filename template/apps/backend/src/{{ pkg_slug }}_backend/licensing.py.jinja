@@ -23,6 +23,9 @@ from .settings import settings
 @lru_cache
 def get_license_provider() -> LicenseProvider:
     return resolve_provider(
+        # A vendor-native license manager (ElecKey, Sentinel, …) installed as an
+        # entry point in this group takes precedence over everything below.
+        entry_point_group="{{ pkg_slug }}.license_provider",
         public_key=settings.license_public_key,
         token=settings.license_token,
         token_file=settings.license_file,

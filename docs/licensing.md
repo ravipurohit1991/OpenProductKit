@@ -28,10 +28,45 @@ provider from the same settings, so an install is licensed once, everywhere.
 | `LocalDevLicenseProvider` | Local config (`APP_LICENSE_DEV_PLAN`) | Development, open-source "feature flags" mode |
 | `SignedLicenseProvider` | An **Ed25519-signed offline token** (env var or file) | Selling licenses with no server at all |
 | `HttpLicenseProvider` | A vendor-run validation endpoint | Central control, revocation, seat counting |
+| `ExternalLicenseProvider` | A **vendor-native license manager** (ElecKey, Sentinel, Wibu, …) behind a `fetch()` adapter | Products that already own a commercial license stack |
 
-Resolution order: `APP_LICENSE_URL` → `APP_LICENSE_TOKEN` → `APP_LICENSE_FILE`
-(default `license.key`) → the dev stub. Invalid or expired licenses **degrade to
-the free plan** with a human-readable message — they never crash the app.
+Resolution order: an installed **entry-point provider** (see below) →
+`APP_LICENSE_URL` → `APP_LICENSE_TOKEN` → `APP_LICENSE_FILE` (default
+`license.key`) → the dev stub. Invalid or expired licenses **degrade to the
+free plan** with a human-readable message — they never crash the app.
+
+### Bridging a native license manager
+
+Many commercial desktop products already run a native licensing SDK (a DLL
+with its own activation, dongles, or a license server). Wrap it once and the
+whole app — route gates, CLI status, desktop dialogs — sees a normal provider:
+
+```python
+# my_product_license_eleckey/__init__.py
+from my_product_licensing import ExternalLicenseProvider, LicenseInfo
+
+def _fetch() -> LicenseInfo:
+    modules = native_sdk.query_modules()          # your SDK call
+    return LicenseInfo(
+        plan="pro" if 3 in modules else "free",
+        features=tuple(MODULE_FEATURES[m] for m in modules),
+        valid=bool(modules),
+    )
+
+provider = ExternalLicenseProvider(_fetch, name="eleckey")
+```
+
+```toml
+# the adapter package's pyproject.toml
+[project.entry-points."my_product.license_provider"]
+eleckey = "my_product_license_eleckey:provider"
+```
+
+Installing the adapter package is the whole activation: the entry point takes
+precedence over every built-in provider. A crashing SDK yields an *invalid*
+license (locked, with a message) — never a crashed app. Source protection
+(Cython/obfuscation) stays a build-pipeline concern in your product repo; the
+provider seam is deliberately independent of it.
 
 ## Selling licenses in three commands (no server)
 
@@ -112,6 +147,7 @@ with `APP_LICENSE_DEV_PLAN=free` to see the locked state.
 ## Where the pieces live
 
 - `packages/licensing` — providers, token signing/verification, `LicenseInfo`
+- `packages/licensing/src/…/external.py` — the native-manager bridge (`ExternalLicenseProvider`, entry-point discovery)
 - `apps/backend/src/…/licensing.py` — resolved provider + `require_plan` / `require_feature`
 - `GET /api/license` — status for the UI (License tab in the admin)
 - `opk license …` — status/install (customer) and keygen/issue/verify (vendor)

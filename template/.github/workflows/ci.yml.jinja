@@ -25,6 +25,9 @@ jobs:
 {%- if desktop_framework == 'pywebview' %}
       - name: Desktop smoke test (in-process, headless)
         run: uv run python -m {{ pkg_slug }}_desktop --check
+{%- elif desktop_framework == 'pyside6' %}
+      - name: Desktop smoke test (core + DB headless, no Qt import)
+        run: uv run python -m {{ pkg_slug }}_desktop_qt --check
 {%- elif desktop_framework == 'electron' %}
       - name: Desktop sidecar smoke test (headless)
         run: uv run python apps/desktop-electron/server.py --check
@@ -32,6 +35,8 @@ jobs:
       - name: Desktop sidecar smoke test (headless)
         run: uv run python apps/desktop-tauri/server.py --check
 {%- endif %}
+
+{%- if include_web_frontend %}
 
   frontend:
     runs-on: ubuntu-latest
@@ -49,6 +54,7 @@ jobs:
         run: pnpm -C apps/frontend typecheck
       - name: Build
         run: pnpm -C apps/frontend build
+{%- endif %}
 {%- if include_docker %}
 
   stack:

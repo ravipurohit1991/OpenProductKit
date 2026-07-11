@@ -1,0 +1,14 @@
+"""The desktop app's headless seam: core + DB boot without a window or Qt.
+
+This is what `{{ cli_name }} desktop --check` runs in CI. It must never import
+PySide6 — that is the whole point of the check mode.
+"""
+
+import sys
+
+from {{ pkg_slug }}_desktop_qt.main import check_headless
+
+
+def test_check_headless_passes_and_never_imports_qt() -> None:
+    assert check_headless() == 0
+    assert "PySide6" not in sys.modules

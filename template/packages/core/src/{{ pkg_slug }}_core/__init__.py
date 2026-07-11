@@ -9,6 +9,7 @@ from .errors import (
     NoteNotFoundError,
     ProjectNotFoundError,
 )
+from .events import Event, get_event_dispatcher, set_event_dispatcher
 from .ports.repository import NoteRepository, ProjectRepository
 from .services.notes import NoteService
 from .services.projects import ProjectService
@@ -24,4 +25,7 @@ __all__ = [
     "CoreError",
     "NoteNotFoundError",
     "ProjectNotFoundError",
+    "Event",
+    "get_event_dispatcher",
+    "set_event_dispatcher",
 ]

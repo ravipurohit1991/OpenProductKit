@@ -12,7 +12,7 @@ Command groups:
 {%- if include_docker %}
   {{ cli_name }} stack …     the Docker stack: up / down / logs{% if include_tunnel %} / share{% endif %}
 {%- endif %}
-plus dev{% if desktop_framework != 'none' %} / desktop{% endif %} / doctor / info / test / lint / fmt / openapi / gen / version.
+plus dev{% if desktop_framework != 'none' %} / desktop{% endif %} / doctor / info / test / lint / fmt / openapi{% if include_web_frontend %} / gen{% endif %} / version.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ license_app = typer.Typer(
 )
 {%- if include_docker %}
 stack_app = typer.Typer(
-    help="Run the whole product as a Docker stack (backend + web{% if database == 'postgres' %} + postgres{% endif %}).",
+    help="Run the whole product as a Docker stack (backend{% if include_web_frontend %} + web{% endif %}{% if database == 'postgres' %} + postgres{% endif %}).",
     no_args_is_help=True,
 )
 {%- endif %}
@@ -152,6 +152,17 @@ def desktop(
     from {{ pkg_slug }}_desktop.main import run as run_desktop
 
     raise typer.Exit(run_desktop(check=check))
+{%- elif desktop_framework == 'pyside6' %}
+@app.command()
+def desktop(
+    check: bool = typer.Option(
+        False, "--check", help="Boot the core + database headless, exit (no window, no Qt)."
+    ),
+) -> None:
+    """Run the desktop app: native Qt widgets over the same core, in-process."""
+    from {{ pkg_slug }}_desktop_qt.main import run as run_desktop
+
+    raise typer.Exit(run_desktop(check=check))
 {%- elif desktop_framework == 'electron' %}
 @app.command()
 def desktop(
@@ -188,8 +199,13 @@ def desktop(
 @app.command()
 def doctor() -> None:
     """Check that the expected local toolchain is present."""
+{%- if include_web_frontend %}
     required = {"python": sys.executable, "node": shutil.which("node")}
     optional = {"pnpm": shutil.which("pnpm"), "docker": shutil.which("docker")}
+{%- else %}
+    required = {"python": sys.executable}
+    optional = {"docker": shutil.which("docker")}
+{%- endif %}
 {%- if desktop_framework == 'tauri' %}
     optional["rustc"] = shutil.which("rustc")
     optional["cargo"] = shutil.which("cargo")
@@ -242,6 +258,7 @@ def openapi(output: str = typer.Option("openapi.json", "--output", "-o")) -> Non
     typer.echo(f"Wrote {output}")
 
 
+{%- if include_web_frontend %}
 @app.command()
 def gen() -> None:
     """Regenerate the typed frontend client from the backend OpenAPI schema."""
@@ -250,6 +267,7 @@ def gen() -> None:
     if code == 0:
         typer.echo("Client regenerated at apps/frontend/src/client/schema.d.ts")
     raise typer.Exit(code)
+{%- endif %}
 
 
 # --- database -----------------------------------------------------------------
@@ -289,13 +307,56 @@ def db_reset() -> None:
 # --- build --------------------------------------------------------------------
 
 
+{%- if include_web_frontend %}
 @build_app.command("web")
 def build_web() -> None:
     """Build the production web bundle."""
     raise typer.Exit(_run(["pnpm", "-C", "apps/frontend", "build"]))
+{%- endif %}
 
 
-{%- if desktop_framework == 'pywebview' %}
+{%- if desktop_framework == 'pyside6' %}
+@build_app.command("desktop")
+def build_desktop() -> None:
+    """Package the desktop app (PyInstaller onedir) into ./dist.
+
+    Bundles the alembic migrations as data files. Code signing / notarization
+    is intentionally out of scope — see the docs.
+    """
+    # Absolute paths: --specpath moves the spec into build/, and PyInstaller
+    # resolves relative --add-data paths against the spec, not the cwd.
+    root = Path.cwd()
+    sep = os.pathsep
+    raise typer.Exit(
+        _run(
+            [
+                "uv",
+                "run",
+                "--group",
+                "build",
+                "pyinstaller",
+                "--noconfirm",
+                "--clean",
+                "--windowed",
+                "--name",
+                "{{ project_slug }}",
+                "--specpath",
+                "build",
+                "--add-data",
+                f"{root / 'apps' / 'backend' / 'alembic.ini'}{sep}alembic",
+                "--add-data",
+                f"{root / 'apps' / 'backend' / 'migrations'}{sep}alembic/migrations",
+                # migrations/env.py is exec'd at runtime from data files, so
+                # static analysis never sees its stdlib imports.
+                "--hidden-import",
+                "logging.config",
+                "--hidden-import",
+                "logging.handlers",
+                str(root / "apps" / "desktop-qt" / "src" / "{{ pkg_slug }}_desktop_qt" / "main.py"),
+            ]
+        )
+    )
+{%- elif desktop_framework == 'pywebview' %}
 @build_app.command("desktop")
 def build_desktop() -> None:
     """Package the desktop app (PyInstaller onedir) into ./dist.
@@ -488,7 +549,9 @@ def stack_up(
         raise typer.Exit(code)
     typer.echo("")
     typer.echo("Stack is up:")
+{%- if include_web_frontend %}
     typer.echo("  web UI:   http://localhost:8080")
+{%- endif %}
     typer.echo("  API:      http://localhost:8080/api/health")
     typer.echo("  API docs: http://localhost:8080/docs")
 {%- if database == 'postgres' %}

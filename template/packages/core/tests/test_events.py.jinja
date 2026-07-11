@@ -1,0 +1,46 @@
+"""The event bus must work headless (no dispatcher) and honor an installed one."""
+
+from {{ pkg_slug }}_core.events import Event, set_event_dispatcher
+
+
+def test_subscribe_emit_unsubscribe() -> None:
+    event = Event("test")
+    seen: list[int] = []
+    off = event.subscribe(seen.append)
+
+    event.emit(1)
+    event.emit(2)
+    off()
+    event.emit(3)
+
+    assert seen == [1, 2]
+
+
+def test_failing_handler_does_not_break_emit() -> None:
+    event = Event("test")
+    seen: list[int] = []
+
+    def boom(_value: int) -> None:
+        raise RuntimeError("handler bug")
+
+    event.subscribe(boom)
+    event.subscribe(seen.append)
+
+    event.emit(7)  # must not raise
+
+    assert seen == [7]
+
+
+def test_dispatcher_receives_handler_and_args() -> None:
+    event = Event("test")
+    calls: list[tuple] = []
+    event.subscribe(lambda *a: None)
+
+    set_event_dispatcher(lambda handler, args: calls.append((handler, args)))
+    try:
+        event.emit("a", 1)
+    finally:
+        set_event_dispatcher(None)
+
+    assert len(calls) == 1
+    assert calls[0][1] == ("a", 1)

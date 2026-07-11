@@ -18,6 +18,16 @@ Initial public template surface:
 - Agent-ready replacement path with `[demo]` markers, `AGENTS.md` and `CLAUDE.md`
 - MkDocs Material documentation site with Read the Docs configuration
 
+## Unreleased
+
+Native-desktop and commercial-licensing surface (driven by porting a real
+PySide6 scientific product onto the template):
+
+- `desktop_framework=pyside6`: `apps/desktop-qt` with native Qt widgets over the core, an in-process demo window, PyInstaller packaging and a Qt-free `--check` smoke test
+- Core event bus (`<pkg_slug>_core.events`): headless-safe `Event` pub/sub with a pluggable dispatcher; the Qt shell installs `QtEventDispatcher` to marshal emissions onto the GUI thread
+- `include_web_frontend=false`: generate without React/pnpm for Qt- or CLI-only products (frontend, CI job, Docker web service and `gen`/`build web` commands all drop out)
+- `ExternalLicenseProvider` + entry-point discovery (`<pkg_slug>.license_provider`): bridge vendor-native license managers (ElecKey, Sentinel, …) ahead of the built-in providers
+
 ## Next
 
 See the [roadmap](roadmap.md) for planned runtime plugin loading, desktop plugin packaging and generated-client drift checks.

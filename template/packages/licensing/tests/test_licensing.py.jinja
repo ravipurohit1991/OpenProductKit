@@ -6,7 +6,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from {{ pkg_slug }}_licensing import (
+    ExternalLicenseProvider,
     HttpLicenseProvider,
+    LicenseInfo,
     LocalDevLicenseProvider,
     SignedLicenseProvider,
     generate_keypair,
@@ -15,6 +17,38 @@ from {{ pkg_slug }}_licensing import (
     resolve_provider,
     verify_token,
 )
+
+
+def test_external_provider_translates_native_result() -> None:
+    provider = ExternalLicenseProvider(
+        lambda: LicenseInfo(plan="pro", licensee="Acme", features=("export",), valid=True),
+        name="eleckey",
+    )
+    assert provider.current_plan() == "pro"
+    assert provider.is_entitled("pro")
+    assert provider.has_feature("export")
+    assert provider.info().source == "eleckey"  # origin stamped for status output
+
+
+def test_external_provider_contains_native_failures() -> None:
+    def broken() -> LicenseInfo:
+        raise OSError("license DLL not found")
+
+    provider = ExternalLicenseProvider(broken, name="eleckey")
+    assert provider.current_plan() == "free"
+    assert not provider.is_entitled("pro")
+    assert not provider.has_feature("export")
+    info = provider.info()
+    assert not info.valid
+    assert "license DLL not found" in info.message
+
+
+def test_resolve_falls_through_when_no_native_adapter_installed() -> None:
+    provider = resolve_provider(
+        entry_point_group="nonexistent.license_provider", dev_plan="enterprise"
+    )
+    assert provider.current_plan() == "enterprise"
+    assert provider.info().source == "dev"
 
 
 def test_plan_ranks() -> None:

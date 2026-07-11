@@ -1,0 +1,23 @@
+[project]
+name = "{{ pkg_slug }}-desktop-qt"
+version = "0.1.0"
+description = "Desktop shell: native Qt widgets over the same core, called in-process (no web view, no HTTP)."
+requires-python = ">={{ python_version }}"
+dependencies = [
+    "{{ pkg_slug }}-backend",
+    "platformdirs>=4",
+    "pyside6>=6.7",
+]
+
+[project.scripts]
+{{ project_slug }}-desktop = "{{ pkg_slug }}_desktop_qt.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ pkg_slug }}_desktop_qt"]
+
+[tool.uv.sources]
+"{{ pkg_slug }}-backend" = { workspace = true }

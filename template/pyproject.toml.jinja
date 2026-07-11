@@ -10,6 +10,9 @@ dependencies = [
 {%- if desktop_framework == 'pywebview' %}
     # Desktop shell — drop this line for server-only deployments.
     "{{ pkg_slug }}-desktop",
+{%- elif desktop_framework == 'pyside6' %}
+    # Desktop shell — drop this line for server-only deployments.
+    "{{ pkg_slug }}-desktop-qt",
 {%- endif %}
     # Example plugins — installed so they are discovered via entry points.
     # Remove these three lines to ship without the bundled examples.
@@ -30,6 +33,8 @@ members = [
     "apps/cli",
 {%- if desktop_framework == 'pywebview' %}
     "apps/desktop",
+{%- elif desktop_framework == 'pyside6' %}
+    "apps/desktop-qt",
 {%- endif %}
     "extensions/*",
 ]
@@ -40,6 +45,8 @@ members = [
 "{{ pkg_slug }}-cli" = { workspace = true }
 {%- if desktop_framework == 'pywebview' %}
 "{{ pkg_slug }}-desktop" = { workspace = true }
+{%- elif desktop_framework == 'pyside6' %}
+"{{ pkg_slug }}-desktop-qt" = { workspace = true }
 {%- endif %}
 "{{ pkg_slug }}-plugin-api" = { workspace = true }
 "{{ pkg_slug }}-licensing" = { workspace = true }
@@ -79,6 +86,8 @@ known-first-party = [
     "{{ pkg_slug }}_cli",
 {%- if desktop_framework == 'pywebview' %}
     "{{ pkg_slug }}_desktop",
+{%- elif desktop_framework == 'pyside6' %}
+    "{{ pkg_slug }}_desktop_qt",
 {%- endif %}
     "{{ pkg_slug }}_plugin_api",
     "{{ pkg_slug }}_licensing",

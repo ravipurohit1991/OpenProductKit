@@ -2,21 +2,27 @@
 
 A Copier question picks the desktop shell — the CLI surface stays identical
 (`opk desktop`, `opk desktop --check`, `opk build desktop`) whichever you
-choose, and the React UI is byte-for-byte the same web build in all of them.
+choose. The three web-view shells render the React UI byte-for-byte from the
+same web build; **PySide6** is different in kind — native Qt widgets and no web
+view at all.
 
-| | pywebview (default) | Electron | Tauri |
-| --- | --- | --- | --- |
-| Architecture | core called **in-process**, no server at all | sidecar backend on localhost | sidecar backend on localhost |
-| Runtime | the OS webview | bundled Chromium | the OS webview |
-| Extra toolchain | none | none | Rust (rustup) |
-| Bundle size | small | largest | smallest |
-| Packaging | PyInstaller | PyInstaller sidecar + electron-builder | PyInstaller sidecar + `tauri build` |
+| | pywebview (default) | PySide6 | Electron | Tauri |
+| --- | --- | --- | --- | --- |
+| Architecture | core called **in-process**, no server at all | core called **in-process**, no server, no web view | sidecar backend on localhost | sidecar backend on localhost |
+| UI | the React web build | native Qt widgets | the React web build | the React web build |
+| Runtime | the OS webview | Qt | bundled Chromium | the OS webview |
+| Extra toolchain | none | none (pip-installed Qt) | none | Rust (rustup) |
+| Bundle size | small | large (Qt) | largest | smallest |
+| Packaging | PyInstaller | PyInstaller | PyInstaller sidecar + electron-builder | PyInstaller sidecar + `tauri build` |
 
 Pick **pywebview** unless you have a concrete reason not to: it is the lightest
-to build and the purest expression of the hexagonal core. Pick **Electron** if
-you want the Chromium-everywhere rendering guarantee and its mature ecosystem
-(auto-update, deep OS integrations). Pick **Tauri** for the smallest installers
-if the Rust toolchain doesn't scare you.
+to build and the purest expression of the hexagonal core. Pick **PySide6** when
+the product *is* a desktop tool — data-heavy or scientific UIs (plots, 3D,
+custom canvases via pyqtgraph/VTK) where a browser engine is dead weight; it
+also lets you skip the web frontend entirely (`include_web_frontend=false`).
+Pick **Electron** if you want the Chromium-everywhere rendering guarantee and
+its mature ecosystem (auto-update, deep OS integrations). Pick **Tauri** for
+the smallest installers if the Rust toolchain doesn't scare you.
 
 ## pywebview — in-process, no server
 
@@ -37,6 +43,28 @@ flowchart LR
   identically to the web app.
 - No socket, no port, no sidecar to babysit or sign separately — possible
   because the core never assumed HTTP in the first place.
+
+## PySide6 — native Qt widgets, no web view
+
+```mermaid
+flowchart LR
+    WIN[Qt widgets<br/>apps/desktop-qt] -- "service calls" --> CORE[core services]
+    CORE --> DB[(SQLite in the user's app-data dir)]
+    CORE -- "Event.emit() from any thread" --> DISP[QtEventDispatcher<br/>queued signal]
+    DISP -- "on the GUI thread" --> WIN
+```
+
+- Widgets call the same core services the API and CLI use, through short-lived
+  sessions — no HTTP, no web build, one process.
+- The decoupling contract runs through `packages/core`'s **event bus**
+  (`events.py`): services emit `Event`s; at startup the shell installs a
+  `QtEventDispatcher` (a queued Qt signal) so handlers land on the GUI thread.
+  Headless — CLI, tests, server — there is no dispatcher and delivery is
+  synchronous. The core never imports Qt.
+- `opk desktop --check` boots the core + database without ever importing
+  PySide6, so CI smoke-tests the desktop wiring on display-less runners.
+- Replacing Qt with React (or anything else) later is additive: the FastAPI
+  backend is already generated and serving the same services.
 
 ## Electron & Tauri — a window over a sidecar
 
@@ -66,15 +94,16 @@ per-user app-data directory, license file included.
 ## Running and packaging
 
 ```bash
-opk build web        # once, or after UI changes
+opk build web        # once, or after UI changes (web-view shells only)
 opk desktop          # native window, dev mode
-opk desktop --check  # headless smoke test: boot + /api/health, no window
+opk desktop --check  # headless smoke test (PySide6: never imports Qt)
 opk build desktop    # installer/bundle into ./dist
 ```
 
 Per framework, `build desktop` runs:
 
 - **pywebview** — PyInstaller onedir bundle (web build + migrations as data files).
+- **PySide6** — PyInstaller onedir bundle (migrations as data files; no web build).
 - **Electron** — PyInstaller server bundle, then `electron-builder` (output in
   `dist/electron`).
 - **Tauri** — PyInstaller onefile server, copied to

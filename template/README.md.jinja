@@ -12,7 +12,12 @@ packages/plugin-api  Extension SDK: the Plugin contract + registry. No runtime d
 packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/HTTP providers.
 apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
 apps/cli             Typer CLI + task runner ({{ cli_name }}).
+{%- if include_web_frontend %}
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP - or the desktop bridge.
+{%- endif %}
+{%- if desktop_framework == 'pyside6' %}
+apps/desktop-qt      PySide6 shell: native Qt widgets calling the core in-process. No web view.
+{%- endif %}
 {%- if desktop_framework == 'pywebview' %}
 apps/desktop         pywebview shell: the same UI + core in one process. No sidecar, no port.
 {%- elif desktop_framework == 'electron' %}
@@ -110,13 +115,35 @@ uv sync --dev                 # install the Python workspace
 uv run {{ cli_name }} hello         # smoke test
 uv run {{ cli_name }} doctor        # check your toolchain
 uv run {{ cli_name }} dev           # API + a basic web page on http://127.0.0.1:8000
+{%- if include_web_frontend %}
 
 # Rich web UI (separate terminal):
 pnpm install
 pnpm -C apps/frontend dev     # http://127.0.0.1:5173 (proxies /api to the backend)
+{%- endif %}
 ```
 
-{%- if desktop_framework == 'pywebview' %}
+{%- if desktop_framework == 'pyside6' %}
+## Desktop app (PySide6 — native Qt widgets, no web view)
+
+Native Qt widgets call the same core services **in the same process** — no
+HTTP, no web build. Qt never leaks into the core: widgets subscribe to core
+events, and a Qt dispatcher marshals emissions onto the GUI thread
+(`apps/desktop-qt/src/.../qt_dispatcher.py`), so the core stays headless for
+the API, the CLI and the tests. Data lives in your OS app-data directory.
+
+```bash
+uv run {{ cli_name }} desktop         # native window, dev mode
+uv run {{ cli_name }} desktop --check # headless smoke test (never imports Qt)
+uv run {{ cli_name }} build desktop   # PyInstaller onedir bundle into ./dist
+```
+
+Swapping the UI later (React, another toolkit) means adding one more adapter —
+the backend API is already there; the core does not change.
+
+Code signing / notarization is intentionally left to you (per-vendor
+certificates); expect OS warnings on unsigned builds.
+{%- elif desktop_framework == 'pywebview' %}
 ## Desktop app (pywebview — no HTTP server)
 
 The same UI in a native window; API calls cross a JS bridge into the FastAPI
@@ -183,9 +210,14 @@ uv run {{ cli_name }} stack share     # same stack + a public trycloudflare.com 
 {%- endif %}
 ```
 
+{% if include_web_frontend -%}
 The web UI is served by nginx (`apps/frontend/nginx.conf`), which proxies
 `/api` and `/docs` to the backend. Your `.env` is passed to the backend at
 runtime and never baked into images.
+{%- else -%}
+The backend is exposed directly on port 8080. Your `.env` is passed to the
+backend at runtime and never baked into images.
+{%- endif %}
 {%- endif %}
 
 ## Licensing
@@ -206,6 +238,7 @@ Gate a route with `Depends(require_plan("pro"))` or
 "Export vault" demo. An HTTP license-server provider is included as well
 (`APP_LICENSE_URL`).
 
+{%- if include_web_frontend %}
 ## Typed API client (generated)
 
 The web UI never hand-writes API types. `apps/frontend/src/client/schema.d.ts`
@@ -219,6 +252,7 @@ uv run {{ cli_name }} gen            # dump OpenAPI + regenerate src/client/sche
 
 Change an endpoint and forget to update a call site, and the TypeScript build
 fails — drift is caught by the compiler.
+{%- endif %}
 
 ## Database migrations
 
@@ -238,7 +272,9 @@ uv run {{ cli_name }} db reset                   # drop everything and re-apply
 uv run {{ cli_name }} test          # pytest across the workspace
 uv run {{ cli_name }} lint          # ruff check
 uv run {{ cli_name }} fmt           # ruff format
+{%- if include_web_frontend %}
 uv run {{ cli_name }} build web     # production web bundle
+{%- endif %}
 uv run {{ cli_name }} info          # project + environment summary
 ```
 

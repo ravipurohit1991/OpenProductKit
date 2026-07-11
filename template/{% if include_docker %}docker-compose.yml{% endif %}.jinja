@@ -3,7 +3,9 @@ name: {{ project_slug }}
 # The full product stack, one command: `{{ cli_name }} stack up` (or
 # `docker compose up --build -d`). Open http://localhost:8080.
 #
+{%- if include_web_frontend %}
 #   web      nginx serving the built frontend, proxying /api to the backend
+{%- endif %}
 #   backend  the FastAPI app{% if database == 'postgres' %}
 #   db       PostgreSQL 16 with a persistent volume{% endif %}{% if include_tunnel %}
 #   tunnel   optional Cloudflare quick tunnel: `{{ cli_name }} stack share`
@@ -24,6 +26,10 @@ services:
 {%- else %}
       APP_DATABASE_URL: sqlite:////app/data/app.db
 {%- endif %}
+{%- if not include_web_frontend %}
+    ports:
+      - "8080:8000"
+{%- endif %}
 {%- if database == 'postgres' %}
     depends_on:
       db:
@@ -43,6 +49,8 @@ services:
       retries: 5
       start_period: 20s
 
+{%- if include_web_frontend %}
+
   web:
     build:
       context: .
@@ -53,6 +61,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+{%- endif %}
 {%- if database == 'postgres' %}
 
   db:
@@ -76,9 +85,15 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     profiles: ["share"]
+{%- if include_web_frontend %}
     command: tunnel --no-autoupdate --url http://web:80
     depends_on:
       - web
+{%- else %}
+    command: tunnel --no-autoupdate --url http://backend:8000
+    depends_on:
+      - backend
+{%- endif %}
 {%- endif %}
 
 volumes:

@@ -7,13 +7,25 @@ flowchart LR
     core["packages/core<br/>domain + ports + services<br/>(pure Python)"]
     be["apps/backend<br/>FastAPI + SQLModel"]
     cli["apps/cli<br/>{{ cli_name }}"]
+{%- if include_web_frontend %}
     fe["apps/frontend<br/>React + typed client"]
-    dt["apps/desktop<br/>pywebview shell"]
+{%- endif %}
+{%- if desktop_framework == 'pyside6' %}
+    dt["apps/desktop-qt<br/>PySide6 shell"]
+{%- elif desktop_framework != 'none' %}
+    dt["apps/desktop<br/>{{ desktop_framework }} shell"]
+{%- endif %}
 
     cli --> core
     be --> core
+{%- if include_web_frontend %}
     fe -->|HTTP| be
+{%- endif %}
+{%- if desktop_framework == 'pyside6' %}
+    dt -->|in-process services + events| core
+{%- elif desktop_framework != 'none' %}
     dt -->|in-process bridge| be
+{%- endif %}
 ```
 
 | Layer | Responsibility |
@@ -21,8 +33,14 @@ flowchart LR
 | `packages/core` | Domain models, repository ports, services. No FastAPI, no DB, no HTTP. |
 | `apps/backend` | FastAPI adapter; owns SQLModel persistence + Alembic migrations. |
 | `apps/cli` | Typer CLI (`{{ cli_name }}`) — another adapter and the task runner. |
+{%- if include_web_frontend %}
 | `apps/frontend` | React web UI over a client generated from the OpenAPI schema. |
+{%- endif %}
+{%- if desktop_framework == 'pyside6' %}
+| `apps/desktop-qt` | Native Qt widgets over the core, in-process; core events reach widgets via a Qt dispatcher. |
+{%- elif desktop_framework != 'none' %}
 | `apps/desktop` | Native window over the same UI; API calls dispatched in-process (no HTTP). |
+{%- endif %}
 | `packages/licensing` | Entitlement: dev stub, signed offline tokens, file/HTTP providers. |
 | `packages/plugin-api`, `extensions/` | The plugin SDK and example plugins. |
 

@@ -9,16 +9,23 @@ _message_after_copy: |
     uv sync --dev            # install the Python workspace
     uv run {{ cli_name }} hello    # smoke test the CLI
     uv run {{ cli_name }} dev      # start the API on http://127.0.0.1:8000
+  {%- if include_web_frontend %}
     pnpm install && pnpm -C apps/frontend dev   # start the web UI
+  {%- endif %}
   {%- if include_docker %}
 
-  Run the whole stack in Docker (backend + web{% if database == 'postgres' %} + postgres{% endif %}):
+  Run the whole stack in Docker (backend{% if include_web_frontend %} + web{% endif %}{% if database == 'postgres' %} + postgres{% endif %}):
     uv run {{ cli_name }} stack up       # http://localhost:8080
   {%- if include_tunnel %}
     uv run {{ cli_name }} stack share    # same, plus a public trycloudflare.com URL
   {%- endif %}
   {%- endif %}
-  {%- if desktop_framework == 'pywebview' %}
+  {%- if desktop_framework == 'pyside6' %}
+
+  Desktop app (PySide6, native Qt widgets over the core, in-process):
+    uv run {{ cli_name }} desktop          # open the window
+    uv run {{ cli_name }} desktop --check  # headless smoke test
+  {%- elif desktop_framework == 'pywebview' %}
 
   Desktop app (pywebview, in-process):
     uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
@@ -78,9 +85,16 @@ desktop_framework:
   default: pywebview
   choices:
     "pywebview — Python-native window, core called in-process, packaged with PyInstaller (recommended)": pywebview
+    "PySide6 — native Qt widgets over the core, no web view (data/scientific desktop apps)": pyside6
     "Electron — Chromium shell over a sidecar backend (JS ecosystem, biggest download)": electron
     "Tauri — Rust shell over a sidecar backend (smallest binaries, needs the Rust toolchain)": tauri
     "None — web + CLI only": none
+
+include_web_frontend:
+  type: bool
+  help: Include the React web frontend (adds pnpm/Node to the toolchain)?
+  default: "{{ desktop_framework != 'pyside6' }}"
+  when: "{{ desktop_framework in ['pyside6', 'none'] }}"
 
 database:
   type: str

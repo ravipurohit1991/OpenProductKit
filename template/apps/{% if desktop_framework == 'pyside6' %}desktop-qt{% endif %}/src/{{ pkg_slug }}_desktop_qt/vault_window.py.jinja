@@ -1,0 +1,154 @@
+"""[demo] The Resource Vault demo as native Qt widgets — replace with your UI.
+
+What to keep when you do: the shape. Widgets call core services through
+short-lived sessions (no business logic in slots), and anything that happens
+off the main thread reports back through core events — the dispatcher installed
+in `main.run()` marshals them onto the Qt thread, so slots can touch widgets.
+"""
+
+from __future__ import annotations
+
+import threading
+
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QPushButton,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+from sqlmodel import Session
+
+from {{ pkg_slug }}_backend.adapters.db.engine import engine
+from {{ pkg_slug }}_backend.adapters.db.repository import (  # [demo]
+    SqlNoteRepository,
+    SqlProjectRepository,
+)
+from {{ pkg_slug }}_backend.licensing import get_license_provider
+from {{ pkg_slug }}_core.events import Event
+from {{ pkg_slug }}_core.services.notes import NoteService  # [demo]
+from {{ pkg_slug }}_core.services.projects import ProjectService  # [demo]
+
+#: Emitted (message: str) whenever the vault changes; any thread may emit.
+activity = Event("desktop.activity")
+
+
+class VaultWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("{{ project_name }}")
+        self.resize(900, 600)
+
+        self._projects = QListWidget()
+        self._notes = QListWidget()
+        add_project = QPushButton("Add project…")
+        add_note = QPushButton("Add note…")
+
+        left = QWidget()
+        left_box = QVBoxLayout(left)
+        left_box.addWidget(QLabel("Projects"))
+        left_box.addWidget(self._projects)
+        left_box.addWidget(add_project)
+
+        right = QWidget()
+        right_box = QVBoxLayout(right)
+        right_box.addWidget(QLabel("Notes"))
+        right_box.addWidget(self._notes)
+        right_box.addWidget(add_note)
+
+        splitter = QSplitter()
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        central = QWidget()
+        layout = QHBoxLayout(central)
+        layout.addWidget(splitter)
+        self.setCentralWidget(central)
+
+        add_project.clicked.connect(self._add_project)
+        add_note.clicked.connect(self._add_note)
+        self._projects.currentItemChanged.connect(lambda *_: self._reload_notes())
+
+        # Core events arrive on the Qt thread (dispatcher installed in main.run),
+        # so updating the status bar here is safe no matter who emitted.
+        self._unsubscribe = activity.subscribe(self._on_activity)
+
+        self._show_license()
+        self._reload_projects()
+        # Demo of cross-thread delivery: emit from a worker, land in a slot.
+        threading.Thread(
+            target=lambda: activity.emit("Vault ready."), daemon=True
+        ).start()
+
+    # --- slots ------------------------------------------------------------
+
+    def _on_activity(self, message: str) -> None:
+        self.statusBar().showMessage(message, 5000)
+
+    def _add_project(self) -> None:
+        name, ok = QInputDialog.getText(self, "Add project", "Project name:")
+        if not ok or not name.strip():
+            return
+        with Session(engine) as session:
+            project = ProjectService(SqlProjectRepository(session)).create(name.strip())
+        self._reload_projects(select_id=project.id)
+        activity.emit(f"Project '{project.name}' created.")
+
+    def _add_note(self) -> None:
+        project_id = self._current_project_id()
+        if project_id is None:
+            activity.emit("Select a project first.")
+            return
+        title, ok = QInputDialog.getText(self, "Add note", "Note title:")
+        if not ok or not title.strip():
+            return
+        with Session(engine) as session:
+            service = NoteService(SqlNoteRepository(session), SqlProjectRepository(session))
+            note = service.create(project_id, title.strip(), "", [])
+        self._reload_notes()
+        activity.emit(f"Note '{note.title}' added.")
+
+    # --- helpers ----------------------------------------------------------
+
+    def _show_license(self) -> None:
+        info = get_license_provider().info()
+        plan = info.plan if info.valid else "free"
+        self.statusBar().showMessage(f"License: {plan} ({info.source})")
+
+    def _current_project_id(self) -> str | None:
+        item = self._projects.currentItem()
+        return item.data(0x0100) if item else None  # Qt.UserRole
+
+    def _reload_projects(self, select_id: str | None = None) -> None:
+        with Session(engine) as session:
+            projects = ProjectService(SqlProjectRepository(session)).list()
+        self._projects.clear()
+        for project in projects:
+            item = QListWidgetItem(project.name)
+            item.setData(0x0100, project.id)
+            self._projects.addItem(item)
+            if project.id == select_id:
+                self._projects.setCurrentItem(item)
+        if self._projects.currentItem() is None and self._projects.count():
+            self._projects.setCurrentRow(0)
+        self._reload_notes()
+
+    def _reload_notes(self) -> None:
+        self._notes.clear()
+        project_id = self._current_project_id()
+        if project_id is None:
+            return
+        with Session(engine) as session:
+            service = NoteService(SqlNoteRepository(session), SqlProjectRepository(session))
+            notes = service.search(project_id=project_id, tag=None, query=None)
+        for note in notes:
+            tags = f"  [{', '.join(note.tags)}]" if note.tags else ""
+            self._notes.addItem(f"{note.title}{tags}")
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        self._unsubscribe()
+        super().closeEvent(event)

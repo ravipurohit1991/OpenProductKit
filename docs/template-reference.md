@@ -26,7 +26,8 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `author_name` | `str` | Package author metadata |
 | `author_email` | `str` | Package author metadata |
 | `python_version` | choice | `3.12` or `3.13` |
-| `desktop_framework` | choice | `pywebview` (default), `electron`, `tauri` or `none`; selects which desktop app directory (if any) is generated and shapes the CLI's `desktop`/`build desktop` commands |
+| `desktop_framework` | choice | `pywebview` (default), `pyside6`, `electron`, `tauri` or `none`; selects which desktop app directory (if any) is generated and shapes the CLI's `desktop`/`build desktop` commands |
+| `include_web_frontend` | bool | Whether `apps/frontend` (React), pnpm files and the `gen`/`build web` commands are generated; asked only for `desktop_framework=pyside6` (default no) or `none` (default yes) — the web-view shells require it |
 | `database` | choice | `sqlite` (default) or `postgres`; shapes the Docker stack, backend dependencies and `.env.example` |
 | `include_docker` | bool | Generates `docker-compose.yml`, Dockerfiles, `nginx.conf`, `.dockerignore` and the `stack` CLI group |
 | `include_tunnel` | bool | Adds the cloudflared quick-tunnel service and `stack share` (asked only when Docker is on) |
@@ -39,12 +40,13 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `<pkg_slug>_backend` | FastAPI app, SQLModel persistence, routes, migrations and adapter wiring |
 | `<pkg_slug>_cli` | Typer CLI and development control plane |
 | `<pkg_slug>_desktop` | pywebview shell and in-process request bridge (only with `desktop_framework=pywebview`; Electron/Tauri generate `apps/desktop-electron/` / `apps/desktop-tauri/` with a `server.py` sidecar instead) |
+| `<pkg_slug>_desktop_qt` | PySide6 shell: native Qt widgets over core services, plus the `QtEventDispatcher` that marshals core events onto the GUI thread (only with `desktop_framework=pyside6`) |
 | `<pkg_slug>_plugin_api` | Plugin manifest, contract, health and registry helpers |
 | `<pkg_slug>_licensing` | License providers, token signing and plan resolution |
 
 ## Frontend package
 
-`apps/frontend` is a React + Vite app. It uses a generated OpenAPI schema in `src/client/schema.d.ts`, a thin client wrapper in `src/client/client.ts`, and hand-written hooks in `src/client/hooks.ts`.
+`apps/frontend` is a React + Vite app (generated unless `include_web_frontend=false`). It uses a generated OpenAPI schema in `src/client/schema.d.ts`, a thin client wrapper in `src/client/client.ts`, and hand-written hooks in `src/client/hooks.ts`.
 
 In browser mode, requests go to the backend over HTTP. In desktop mode, the same client dispatches through the pywebview bridge.
 

@@ -9,10 +9,18 @@ This project was generated from [OpenProductKit](https://github.com/ravipurohit1
 ```bash
 uv sync --dev
 uv run {{ cli_name }} dev              # API on http://127.0.0.1:8000
+{%- if include_web_frontend %}
 pnpm install && pnpm -C apps/frontend dev
+{%- endif %}
+{%- if desktop_framework == 'pyside6' %}
+
+# desktop app (native Qt widgets over the same core, no web build):
+uv run {{ cli_name }} desktop
+{%- elif desktop_framework != 'none' %}
 
 # desktop app (same core, no HTTP server):
 uv run {{ cli_name }} build web && uv run {{ cli_name }} desktop
+{%- endif %}
 ```
 
 ## Serve these docs
