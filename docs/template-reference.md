@@ -62,6 +62,8 @@ In browser mode, requests go to the backend over HTTP. In desktop mode, the same
 | Frontend view | `apps/frontend/src/` |
 | Plugin | `extensions/*` or a separate package exposing `<pkg_slug>.plugins` entry points |
 | Marketplace catalog | `marketplace/catalog.json` (or a hosted URL via `APP_MARKETPLACE_URL`) |
+| Auth enforcement | `apps/backend/src/<pkg_slug>_backend/auth.py` (`enforce_auth`, `require_admin`) |
+| CI workflows | `.github/workflows/ci.yml` (tests, typed-client drift gate) and `release.yml` (tag-triggered desktop installers, when a desktop shell was selected) |
 
 ## Demo markers
 

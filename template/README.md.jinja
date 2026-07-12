@@ -96,11 +96,27 @@ token is activated.
 ```bash
 uv run {{ cli_name }} marketplace list             # same view, headless
 uv run {{ cli_name }} marketplace unlock <token>   # activate a license token
+uv run {{ cli_name }} marketplace install <id>     # install a catalog extension
 ```
 
 ```
 GET  /api/marketplace             installed + catalog, with lock state
 POST /api/marketplace/unlock      verify + persist a license token, apply now
+POST /api/marketplace/install     pip-install a catalog item, mount routes live
+                                  (opt-in: APP_MARKETPLACE_ALLOW_INSTALL=true)
+```
+
+## Accounts (hosted deployments)
+
+Everything is open until you set `APP_AUTH_ENABLED=true` — the mode meant for
+putting the product on a URL. Then every API route needs a login, the first
+visit creates the admin account, admins get a **Users** tab, and operator
+actions (plugin toggles, license unlock, installs, user management) are
+admin-only. Desktop/local runs stay accountless.
+
+```bash
+uv run {{ cli_name }} user add you@example.com --admin
+uv run {{ cli_name }} user list
 ```
 
 ## Develop

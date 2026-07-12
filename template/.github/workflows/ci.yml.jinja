@@ -49,6 +49,29 @@ jobs:
         run: pnpm -C apps/frontend typecheck
       - name: Build
         run: pnpm -C apps/frontend build
+
+  # The committed typed client must match the backend's OpenAPI schema. Stable
+  # because openapi-typescript is pinned exactly in package.json; when this
+  # fails, run `{{ cli_name }} gen` and commit the result.
+  typed-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "{{ python_version }}"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --dev
+      - run: pnpm install
+      - name: Drift gate
+        run: uv run {{ cli_name }} gen --check
 {%- if include_docker %}
 
   stack:

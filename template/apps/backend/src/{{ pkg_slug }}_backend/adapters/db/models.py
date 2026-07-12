@@ -43,3 +43,28 @@ class PluginStateRow(SQLModel, table=True):
 
     plugin_id: str = Field(primary_key=True)
     enabled: bool = Field(default=True)
+
+
+class UserRow(SQLModel, table=True):
+    """A user account. Only consulted when APP_AUTH_ENABLED is on (hosted
+    deployments); the desktop/local story runs without accounts."""
+
+    __tablename__ = "users"
+
+    id: str = Field(primary_key=True)
+    email: str = Field(unique=True, index=True)
+    password_hash: str
+    is_admin: bool = Field(default=False)
+    created_at: datetime
+
+
+class AuthSessionRow(SQLModel, table=True):
+    """A bearer session. Only the SHA-256 of the token is stored, so a leaked
+    database does not leak usable tokens."""
+
+    __tablename__ = "auth_sessions"
+
+    token_hash: str = Field(primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    created_at: datetime
+    expires_at: datetime

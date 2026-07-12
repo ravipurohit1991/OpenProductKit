@@ -57,13 +57,41 @@ def _require_active(plugin_id: str, required_plan: str | None):
     return dependency
 
 
+# Plugin ids whose routers are already mounted on the app — so a runtime
+# install (marketplace) can mount only what is new instead of double-mounting.
+_mounted: set[str] = set()
+
+
+def _mount(app: FastAPI, plugin: Plugin) -> None:
+    router = plugin.backend_router()
+    manifest = plugin.manifest
+    _mounted.add(manifest.id)
+    if router is None:
+        return
+    app.include_router(
+        router,
+        dependencies=[Depends(_require_active(manifest.id, manifest.required_plan))],
+    )
+
+
 def mount_plugin_routers(app: FastAPI) -> None:
     for plugin in discovered_plugins():
-        router = plugin.backend_router()
-        manifest = plugin.manifest
-        if router is None:
-            continue
-        app.include_router(
-            router,
-            dependencies=[Depends(_require_active(manifest.id, manifest.required_plan))],
-        )
+        _mount(app, plugin)
+
+
+def rescan_and_mount_new(app: FastAPI) -> list[str]:
+    """Re-discover entry points (after a runtime install) and mount newcomers.
+
+    FastAPI routing is a live list, so routers can be added while serving.
+    Returns the ids of newly mounted plugins.
+    """
+    import importlib
+
+    importlib.invalidate_caches()
+    discovered_plugins.cache_clear()
+    new_ids: list[str] = []
+    for plugin in discovered_plugins():
+        if plugin.manifest.id not in _mounted:
+            _mount(app, plugin)
+            new_ids.append(plugin.manifest.id)
+    return new_ids

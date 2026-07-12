@@ -59,6 +59,9 @@ marketplace_app = typer.Typer(
 license_app = typer.Typer(
     help="License status, install and vendor tooling (keygen/issue).", no_args_is_help=True
 )
+user_app = typer.Typer(
+    help="Manage user accounts (enforced when APP_AUTH_ENABLED is on).", no_args_is_help=True
+)
 {%- if include_docker %}
 stack_app = typer.Typer(
     help="Run the whole product as a Docker stack (backend + web{% if database == 'postgres' %} + postgres{% endif %}).",
@@ -73,6 +76,7 @@ app.add_typer(docs_app, name="docs")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(marketplace_app, name="marketplace")
 app.add_typer(license_app, name="license")
+app.add_typer(user_app, name="user")
 {%- if include_docker %}
 app.add_typer(stack_app, name="stack")
 {%- endif %}
@@ -243,13 +247,59 @@ def openapi(output: str = typer.Option("openapi.json", "--output", "-o")) -> Non
 
 
 @app.command()
-def gen() -> None:
+def gen(
+    check: bool = typer.Option(
+        False, "--check", help="Verify the committed client matches the API; write nothing."
+    ),
+) -> None:
     """Regenerate the typed frontend client from the backend OpenAPI schema."""
+    if check:
+        raise typer.Exit(_gen_check())
     openapi(output="openapi.json")
     code = _run(["pnpm", "-C", "apps/frontend", "gen:client"])
     if code == 0:
         typer.echo("Client regenerated at apps/frontend/src/client/schema.d.ts")
     raise typer.Exit(code)
+
+
+def _gen_check() -> int:
+    """Drift gate: regenerate the client into build/ and diff the committed one.
+
+    Stable because openapi-typescript is pinned exactly in package.json — the
+    original blocker for this gate was format drift across its minor versions.
+    """
+    build_dir = Path("build")
+    build_dir.mkdir(exist_ok=True)
+    schema_json = build_dir / "openapi.gen-check.json"
+    schema_dts = build_dir / "schema.gen-check.d.ts"
+    openapi(output=str(schema_json))
+    code = _run(
+        [
+            "pnpm",
+            "-C",
+            "apps/frontend",
+            "exec",
+            "openapi-typescript",
+            str(Path("..", "..") / schema_json),
+            "-o",
+            str(Path("..", "..") / schema_dts),
+        ]
+    )
+    if code != 0:
+        return code
+    committed = Path("apps/frontend/src/client/schema.d.ts")
+    fresh_text = schema_dts.read_text(encoding="utf-8").replace("\r\n", "\n")
+    committed_text = (
+        committed.read_text(encoding="utf-8").replace("\r\n", "\n")
+        if committed.is_file()
+        else ""
+    )
+    if fresh_text != committed_text:
+        typer.echo("Generated client is out of date with the backend API.", err=True)
+        typer.echo("Fix it with: {{ cli_name }} gen  (then commit the result)", err=True)
+        return 1
+    typer.echo("Generated client is in sync with the backend API.")
+    return 0
 
 
 # --- database -----------------------------------------------------------------
@@ -293,6 +343,28 @@ def db_reset() -> None:
 def build_web() -> None:
     """Build the production web bundle."""
     raise typer.Exit(_run(["pnpm", "-C", "apps/frontend", "build"]))
+
+
+{%- if desktop_framework != 'none' %}
+def _plugin_bundle_args() -> list[str]:
+    """PyInstaller args that carry installed plugins into the frozen build.
+
+    Entry-point discovery inside the bundle needs each plugin's dist-info
+    (--copy-metadata) and its module frozen in (--hidden-import) — PyInstaller's
+    static analysis cannot see either on its own.
+    """
+    from importlib import metadata
+
+    args: list[str] = []
+    for dist in metadata.distributions():
+        plugin_eps = [ep for ep in dist.entry_points if ep.group == ENTRYPOINT_GROUP]
+        if not plugin_eps:
+            continue
+        args += ["--copy-metadata", dist.metadata["Name"]]
+        for ep in plugin_eps:
+            args += ["--hidden-import", ep.module]
+    return args
+{%- endif %}
 
 
 {%- if desktop_framework == 'pywebview' %}
@@ -339,6 +411,9 @@ def build_desktop() -> None:
                 "logging.handlers",
                 "--collect-all",
                 "webview",
+                # Installed plugins: metadata + modules, so entry-point
+                # discovery keeps working inside the frozen build.
+                *_plugin_bundle_args(),
                 str(root / "apps" / "desktop" / "src" / "{{ pkg_slug }}_desktop" / "main.py"),
             ]
         )
@@ -380,6 +455,9 @@ def _build_server_sidecar(*, name: str, entry: str, onefile: bool) -> int:
             "logging.config",
             "--hidden-import",
             "logging.handlers",
+            # Installed plugins: metadata + modules, so entry-point discovery
+            # keeps working inside the frozen build.
+            *_plugin_bundle_args(),
             str(root / entry),
         ]
     )
@@ -715,6 +793,42 @@ def marketplace_unlock(
     _echo_license(get_license_provider().info())
 
 
+@marketplace_app.command("install")
+def marketplace_install(
+    item_id: str = typer.Argument(..., help="Catalog item id (see: marketplace list)."),
+) -> None:
+    """Install a catalog extension into the current environment.
+
+    The operator-side equivalent of the Marketplace Install button; it does not
+    need APP_MARKETPLACE_ALLOW_INSTALL (running this is already shell access).
+    In the uv workspace prefer `uv add <package>` for a durable dependency.
+    """
+    from {{ pkg_slug }}_backend.api.routes.marketplace import find_catalog_item, pip_install
+
+    item = find_catalog_item(item_id)
+    if item is None:
+        typer.echo(f"Unknown catalog item: {item_id}", err=True)
+        raise typer.Exit(1)
+    requirement = str(item.get("package", "")).strip()
+    if not requirement:
+        hint = str(item.get("install_hint", "")).strip()
+        typer.echo(f"No installable package for '{item_id}'.", err=True)
+        if hint:
+            typer.echo(f"Install it manually with: {hint}", err=True)
+        raise typer.Exit(1)
+    ok, error = pip_install(requirement)
+    if not ok:
+        typer.echo(f"Install failed: {error}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Installed {requirement}.")
+    required_plan = item.get("required_plan") or None
+    if not get_license_provider().is_entitled(required_plan):
+        typer.echo(
+            f"Note: '{item_id}' needs the {required_plan} plan — it stays locked "
+            "until a license is activated (marketplace unlock)."
+        )
+
+
 # --- licensing ----------------------------------------------------------------
 
 
@@ -829,6 +943,98 @@ def license_issue(
         Path(out).write_text(token + "\n", encoding="utf-8")
         typer.echo(f"Wrote {out}")
     typer.echo(token)
+
+
+# --- users (hosted deployments; enforced when APP_AUTH_ENABLED is on) ----------
+
+
+@user_app.command("add")
+def user_add(
+    email: str = typer.Argument(..., help="The user's email (their login)."),
+    password: str = typer.Option(
+        None, "--password", help="Set non-interactively; omit to be prompted."
+    ),
+    admin: bool = typer.Option(
+        False, "--admin", help="Admins manage plugins, licenses and users."
+    ),
+) -> None:
+    """Create a user account."""
+    from {{ pkg_slug }}_backend.auth import create_user
+
+    if password is None:
+        password = typer.prompt("Password", hide_input=True, confirmation_prompt=True)
+    with _session() as session:
+        try:
+            user = create_user(session, email, password, is_admin=admin)
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1) from exc
+    typer.echo(f"Created {'admin' if user.is_admin else 'user'} {user.email} ({user.id})")
+
+
+@user_app.command("list")
+def user_list() -> None:
+    """List user accounts."""
+    from sqlmodel import select
+
+    from {{ pkg_slug }}_backend.adapters.db.models import UserRow
+
+    with _session() as session:
+        users = session.exec(select(UserRow).order_by(UserRow.created_at)).all()
+    if not users:
+        typer.echo("No users yet. Create one with: {{ cli_name }} user add <email>")
+        return
+    for user in users:
+        role = "admin" if user.is_admin else "user "
+        typer.echo(f"  [{role}] {user.email}  ({user.id})")
+
+
+@user_app.command("remove")
+def user_remove(email: str = typer.Argument(..., help="Email of the account to delete.")) -> None:
+    """Delete a user account (and its sessions)."""
+    from sqlmodel import delete, select
+
+    from {{ pkg_slug }}_backend.adapters.db.models import AuthSessionRow, UserRow
+
+    with _session() as session:
+        user = session.exec(select(UserRow).where(UserRow.email == email.lower())).first()
+        if user is None:
+            typer.echo(f"No user with email: {email}", err=True)
+            raise typer.Exit(1)
+        session.exec(delete(AuthSessionRow).where(AuthSessionRow.user_id == user.id))
+        session.delete(user)
+        session.commit()
+    typer.echo(f"Removed {email}.")
+
+
+@user_app.command("passwd")
+def user_passwd(
+    email: str = typer.Argument(..., help="Email of the account."),
+    password: str = typer.Option(
+        None, "--password", help="Set non-interactively; omit to be prompted."
+    ),
+) -> None:
+    """Reset a user's password (also revokes their open sessions)."""
+    from sqlmodel import delete, select
+
+    from {{ pkg_slug }}_backend.adapters.db.models import AuthSessionRow, UserRow
+    from {{ pkg_slug }}_backend.auth import hash_password
+
+    if password is None:
+        password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if len(password) < 8:
+        typer.echo("Password must be at least 8 characters.", err=True)
+        raise typer.Exit(1)
+    with _session() as session:
+        user = session.exec(select(UserRow).where(UserRow.email == email.lower())).first()
+        if user is None:
+            typer.echo(f"No user with email: {email}", err=True)
+            raise typer.Exit(1)
+        user.password_hash = hash_password(password)
+        session.add(user)
+        session.exec(delete(AuthSessionRow).where(AuthSessionRow.user_id == user.id))
+        session.commit()
+    typer.echo(f"Password updated for {email}.")
 
 
 # Attach CLI commands contributed by installed, licensed plugins.

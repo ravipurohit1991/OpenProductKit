@@ -1,5 +1,5 @@
 {
-  "_comment": "The extension catalog shown in the Marketplace tab. Installed plugins are discovered automatically; list here whatever else you offer. Host this file at a URL and set APP_MARKETPLACE_URL to manage the catalog without shipping app updates.",
+  "_comment": "The extension catalog shown in the Marketplace tab. Installed plugins are discovered automatically; list here whatever else you offer. Host this file at a URL and set APP_MARKETPLACE_URL to manage the catalog without shipping app updates. A 'package' (pip requirement or local path) makes an item installable from the running app when APP_MARKETPLACE_ALLOW_INSTALL=true; 'install_hint' stays the manual fallback.",
   "items": [
     {
       "id": "example.reports",
@@ -8,7 +8,8 @@
       "description": "Summary reports over your data — an extension that ships in the repo but is only installed on demand.",
       "required_plan": "pro",
       "homepage": "https://example.com/extensions/reports",
-      "install_hint": "uv add {{ pkg_slug }}-plugin-reports"
+      "install_hint": "uv add {{ pkg_slug }}-plugin-reports",
+      "package": "./extensions/example-marketplace-plugin"
     }
   ]
 }

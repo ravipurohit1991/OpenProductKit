@@ -27,8 +27,10 @@ See [Quickstart](quickstart.md) for the full first run, including the web UI and
 | CLI | Typer command surface for dev, DB, docs, builds, plugins and licensing |
 | Frontend | React + Vite over a generated typed client |
 | Desktop | pywebview shell that calls the app in-process, with no HTTP sidecar |
-| Commercial hooks | Signed offline licenses, HTTP license provider, plan and feature gates |
+| Commercial hooks | Signed offline licenses, HTTP license provider, plan and feature gates, [payment recipes](payments.md) |
 | Extensions | Python entry-point plugins with routes, CLI commands, settings and admin UI |
+| Hosted mode | Optional [user accounts](auth.md) (runtime switch) and [deploy recipes](deploy-recipes.md) for common hosts |
+| Releases | Tag-triggered CI that builds desktop installers per OS onto GitHub Releases |
 | Rework path | `[demo]` markers plus generated `AGENTS.md` and `CLAUDE.md` |
 
 ## Why it's different

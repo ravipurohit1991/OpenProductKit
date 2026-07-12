@@ -46,6 +46,26 @@ async function bridgeFetch(input: Request): Promise<Response> {
   });
 }
 
+// Bearer session for hosted deployments (APP_AUTH_ENABLED). The token lives in
+// localStorage; while auth is disabled (the default, and always on desktop)
+// nothing is stored and the header is simply never added.
+export const AUTH_TOKEN_KEY = "auth_token";
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string | null): void {
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+async function authFetch(input: Request): Promise<Response> {
+  const token = getAuthToken();
+  if (token) input.headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input);
+}
+
 // Web: baseUrl "/" — Vite proxies /api in dev; same-origin in prod.
 // Desktop: a dummy http:// base keeps URL parsing sane on a file:// page (a
 // relative "/api/…" would resolve drive-relative to file:///C:/api/…); it is
@@ -53,5 +73,5 @@ async function bridgeFetch(input: Request): Promise<Response> {
 export const client = createClient<paths>(
   isDesktop
     ? { baseUrl: "http://desktop.internal", fetch: bridgeFetch }
-    : { baseUrl: "/" },
+    : { baseUrl: "/", fetch: authFetch },
 );

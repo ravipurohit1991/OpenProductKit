@@ -89,7 +89,15 @@ Per framework, `build desktop` runs:
     that a template cannot do for you — budget for it before shipping.
 
 !!! note "Plugins in frozen builds"
-    Dev-time plugin discovery uses Python entry-point metadata, which PyInstaller
-    does not bundle by default. The packaged desktop app runs the core product;
-    shipping plugins inside frozen bundles (via `--copy-metadata`) is a
-    roadmap item.
+    `build desktop` bundles every plugin installed in the build environment —
+    both its modules and its entry-point metadata (`--copy-metadata`), so
+    discovery keeps working inside the frozen app. Install the extensions you
+    want to ship (`uv add <slug>-plugin-reports`) before building. Runtime
+    marketplace installs are refused in frozen builds for the same reason —
+    there is nothing mutable to install into.
+
+## Releasing it
+
+Tag-triggered CI builds installers for all three OSes and attaches them to a
+GitHub Release; each shell also has an auto-update path (Electron's is nearly
+turnkey). Both are covered in [Releases & auto-update](releases.md).

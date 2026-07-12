@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { CLI_NAME } from "./config";
 import {
+  useInstallExtension,
   useLicense,
   useMarketplace,
   useSetPluginEnabled,
@@ -74,6 +75,27 @@ function UnlockBox() {
   );
 }
 
+function InstallButton({ item }: { item: MarketplaceItem }) {
+  const install = useInstallExtension();
+  if (!item.entitled) {
+    return <span style={{ fontSize: 13, color: "#a52" }}>Unlock a license to install</span>;
+  }
+  return (
+    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+      {install.isError && (
+        <span style={{ color: "crimson", fontSize: 12 }}>Install failed — see the backend log.</span>
+      )}
+      <button
+        onClick={() => install.mutate(item.id)}
+        disabled={install.isPending}
+        style={{ padding: "0.3rem 0.9rem", borderRadius: 6, border: "1px solid #ccc", cursor: "pointer" }}
+      >
+        {install.isPending ? "Installing…" : "Install"}
+      </button>
+    </span>
+  );
+}
+
 export function Marketplace() {
   const marketplace = useMarketplace();
   const setEnabled = useSetPluginEnabled();
@@ -117,12 +139,13 @@ export function Marketplace() {
                     </a>
                   )}
                 </div>
-                {!item.installed && item.install_hint && (
+                {!item.installed && !item.installable && item.install_hint && (
                   <div style={{ marginTop: 6, fontSize: 13 }}>
                     Install it with: <code>{item.install_hint}</code>
                   </div>
                 )}
               </div>
+              {!item.installed && item.installable && <InstallButton item={item} />}
               {item.installed && (
                 <label style={{ display: "flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
                   <input

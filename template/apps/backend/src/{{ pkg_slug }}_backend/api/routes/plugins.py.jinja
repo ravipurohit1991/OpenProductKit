@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ...adapters.db.plugin_state import set_enabled
+from ...auth import require_admin
 from ...plugins import build_registry
 from ..deps import SessionDep
 
@@ -49,12 +50,16 @@ def list_plugins(session: SessionDep) -> list[PluginOut]:
     return [_to_out(v) for v in build_registry(session).all()]
 
 
-@router.post("/{plugin_id}/enable", response_model=PluginOut)
+@router.post(
+    "/{plugin_id}/enable", response_model=PluginOut, dependencies=[Depends(require_admin)]
+)
 def enable_plugin(plugin_id: str, session: SessionDep) -> PluginOut:
     return _set_state(session, plugin_id, enabled=True)
 
 
-@router.post("/{plugin_id}/disable", response_model=PluginOut)
+@router.post(
+    "/{plugin_id}/disable", response_model=PluginOut, dependencies=[Depends(require_admin)]
+)
 def disable_plugin(plugin_id: str, session: SessionDep) -> PluginOut:
     return _set_state(session, plugin_id, enabled=False)
 
