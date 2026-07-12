@@ -7,8 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  logo: assets/logo.svg
-  favicon: assets/logo.svg
+  logo: assets/brand/openproductkit-favicon.svg
+  favicon: assets/brand/openproductkit-favicon.svg
   features:
     - navigation.instant
     - navigation.sections
