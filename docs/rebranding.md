@@ -21,6 +21,16 @@ You are prompted for:
 
 Everything — package names, imports, the desktop bundle id (later), README, `.env.example`, Docker image names — is rendered from these answers.
 
+## Brand assets
+
+OpenProductKit's source docs keep the reusable project marks in `docs/assets/brand/`.
+
+| Asset | Preview | Use |
+| --- | --- | --- |
+| `openproductkit-banner.svg` | <img src="assets/brand/openproductkit-banner.svg" alt="OpenProductKit banner" width="320"> | Wide README and docs hero placements |
+| `openproductkit-logo.svg` | <img src="assets/brand/openproductkit-logo.svg" alt="OpenProductKit wordmark" width="240"> | Wide headers, presentations and brand references |
+| `openproductkit-favicon.svg` | <img src="assets/brand/openproductkit-favicon.svg" alt="OpenProductKit favicon" width="56"> | Browser favicon and compact docs navigation logo |
+
 ## Update
 
 Copier records your answers in `.copier-answers.yml`. To pull in later template improvements:

@@ -1,7 +1,7 @@
 # OpenProductKit
 
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="OpenProductKit logo" width="96" height="96">
+  <img src="docs/assets/brand/openproductkit-banner.svg" alt="OpenProductKit" width="820">
 </p>
 
 <p align="center">
@@ -21,6 +21,8 @@ OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives 
 The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
 
 **Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
+
+**Brand assets:** [banner](docs/assets/brand/openproductkit-banner.svg) | [wordmark](docs/assets/brand/openproductkit-logo.svg) | [favicon](docs/assets/brand/openproductkit-favicon.svg)
 
 ---
 

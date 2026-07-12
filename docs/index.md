@@ -1,5 +1,7 @@
 # OpenProductKit
 
+![OpenProductKit banner](assets/brand/openproductkit-banner.svg){ width="760" }
+
 A white-label **product-template** for shipping commercial apps across **web, CLI and desktop** from **one decoupled core** — with plugins, real licensing, a generated typed client, migrations, tests and CI built in.
 
 This is not another FastAPI + React boilerplate. It is a *product-template operating system*: generate it, answer a few questions, and get a runnable, rebrandable, extensible app whose business logic lives in a single framework-free core and whose surfaces are thin adapters around it.
