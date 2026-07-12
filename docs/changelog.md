@@ -2,6 +2,15 @@
 
 OpenProductKit is currently pre-1.0. The template and generated packages are versioned as `0.1.0` while the surface is proven in real projects.
 
+## Unreleased — Milestone 5
+
+- Optional user accounts as a runtime switch (`APP_AUTH_ENABLED`): scrypt passwords, hashed bearer sessions, first-run admin setup, a Users admin tab, a `user` CLI group, and admin-gated operator actions
+- Runtime marketplace installs (`POST /api/marketplace/install`, `marketplace install` CLI): opt-in via `APP_MARKETPLACE_ALLOW_INSTALL`, live route mounting without a restart
+- Frozen desktop builds bundle installed plugins (`--copy-metadata` + hidden imports)
+- Generated `release.yml`: tag-triggered installers for Windows/macOS/Linux attached to a GitHub Release; Electron updater feed published alongside
+- Typed-client drift gate: `gen --check` wired into the generated project's CI and the template's CI; `openapi-typescript` pinned exactly
+- New docs: [Payments](payments.md) (Stripe / Lemon Squeezy / Paddle recipes), [Deploy recipes](deploy-recipes.md), [Auth & users](auth.md) and [Releases & auto-update](releases.md)
+
 ## 0.1.0
 
 Initial public template surface:
@@ -20,4 +29,4 @@ Initial public template surface:
 
 ## Next
 
-See the [roadmap](roadmap.md) for planned runtime plugin loading, desktop plugin packaging and generated-client drift checks.
+See the [roadmap](roadmap.md) for what's planned: plugin permissions and sandboxing, signed catalogs, SSO/OIDC, and per-user data ownership.

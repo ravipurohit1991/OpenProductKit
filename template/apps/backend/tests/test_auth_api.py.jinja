@@ -1,0 +1,122 @@
+"""Auth is a runtime switch: these tests flip `settings.auth_enabled` per test.
+
+Note on ordering: the shared test database lives for the whole session, so the
+first-run setup test (which needs an empty users table) is defined first; every
+other test creates its own uniquely-named users.
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from {{ pkg_slug }}_backend.adapters.db.engine import engine
+from {{ pkg_slug }}_backend.app import app
+from {{ pkg_slug }}_backend.auth import create_user, hash_password, verify_password
+from {{ pkg_slug }}_backend.settings import settings
+
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def auth_on(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", True)
+
+
+def _login(client, email: str, password: str) -> dict[str, str]:
+    resp = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200
+    return {"Authorization": f"Bearer {resp.json()['token']}"}
+
+
+def _add_user(client, email: str, *, admin: bool = False) -> dict[str, str]:
+    with Session(engine) as session:
+        create_user(session, email, "sw0rdfish-pass", is_admin=admin)
+    return _login(client, email, "sw0rdfish-pass")
+
+
+def test_password_hashing_roundtrip() -> None:
+    stored = hash_password("correct horse battery staple")
+    assert verify_password("correct horse battery staple", stored)
+    assert not verify_password("wrong password", stored)
+    assert not verify_password("correct horse battery staple", "garbage")
+
+
+def test_everything_open_while_auth_disabled(client) -> None:
+    status = client.get("/api/auth/me").json()
+    assert status == {"auth_enabled": False, "needs_setup": False, "user": None}
+    # No token, full access — the desktop/local story.
+    assert client.get("/api/projects").status_code == 200
+    # Account endpoints explain themselves instead of half-working.
+    resp = client.post("/api/auth/login", json={"email": "a@b.c", "password": "12345678"})
+    assert resp.status_code == 400
+
+
+def test_first_run_setup_creates_admin_and_signs_in(client, auth_on) -> None:
+    # With auth on and no users, the API is closed and setup is advertised.
+    assert client.get("/api/projects").status_code == 401
+    status = client.get("/api/auth/me").json()
+    assert status["auth_enabled"] is True
+    assert status["needs_setup"] is True
+
+    resp = client.post(
+        "/api/auth/setup", json={"email": "owner@example.com", "password": "hunter2hunter2"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["user"]["is_admin"] is True
+    headers = {"Authorization": f"Bearer {body['token']}"}
+
+    # The session works, and /me reflects it.
+    assert client.get("/api/projects", headers=headers).status_code == 200
+    me = client.get("/api/auth/me", headers=headers).json()
+    assert me["needs_setup"] is False
+    assert me["user"]["email"] == "owner@example.com"
+
+    # Setup is one-shot.
+    resp = client.post(
+        "/api/auth/setup", json={"email": "mallory@example.com", "password": "12345678"}
+    )
+    assert resp.status_code == 403
+
+
+def test_login_rejects_bad_credentials_and_logout_revokes(client, auth_on) -> None:
+    headers = _add_user(client, "carol@example.com")
+
+    resp = client.post(
+        "/api/auth/login", json={"email": "carol@example.com", "password": "wrong-pass"}
+    )
+    assert resp.status_code == 401
+
+    assert client.get("/api/projects", headers=headers).status_code == 200
+    assert client.post("/api/auth/logout", headers=headers).status_code == 200
+    # The token is dead now.
+    assert client.get("/api/projects", headers=headers).status_code == 401
+
+
+def test_operator_actions_need_admin(client, auth_on) -> None:
+    user_headers = _add_user(client, "dave@example.com")
+    admin_headers = _add_user(client, "root@example.com", admin=True)
+
+    # Plugin toggles: members are read-only, admins operate. ("enable" is
+    # idempotent here, so other tests see plugin state unchanged.)
+    assert client.get("/api/plugins", headers=user_headers).status_code == 200
+    resp = client.post("/api/plugins/example.basic/enable", headers=user_headers)
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["error"] == "admin_required"
+    resp = client.post("/api/plugins/example.basic/enable", headers=admin_headers)
+    assert resp.status_code == 200
+
+    # User management is admin-only, and self-deletion is refused.
+    assert client.get("/api/auth/users", headers=user_headers).status_code == 403
+    users = client.get("/api/auth/users", headers=admin_headers).json()
+    root_id = next(u["id"] for u in users if u["email"] == "root@example.com")
+    dave_id = next(u["id"] for u in users if u["email"] == "dave@example.com")
+    resp = client.delete(f"/api/auth/users/{root_id}", headers=admin_headers)
+    assert resp.status_code == 400
+    resp = client.delete(f"/api/auth/users/{dave_id}", headers=admin_headers)
+    assert resp.status_code == 200
+    assert client.get("/api/projects", headers=user_headers).status_code == 401

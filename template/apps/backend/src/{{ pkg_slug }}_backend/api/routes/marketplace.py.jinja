@@ -16,16 +16,20 @@ call `{{ cli_name }} license issue` — the app side is already done.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+import sys
 import urllib.request
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from {{ pkg_slug }}_licensing import verify_token
 
 from ... import licensing
-from ...plugins import build_registry
+from ...auth import require_admin
+from ...plugins import build_registry, rescan_and_mount_new
 from ...settings import settings
 from ..deps import SessionDep
 
@@ -41,6 +45,11 @@ class MarketplaceItemOut(BaseModel):
     homepage: str = ""
     #: Shell command that installs the extension, shown for catalog-only items.
     install_hint: str = ""
+    #: pip requirement (or local path) the app can install at runtime.
+    package: str = ""
+    #: True when this install can be done from the running app right now
+    #: (package present, APP_MARKETPLACE_ALLOW_INSTALL on, not a frozen build).
+    installable: bool = False
     installed: bool
     enabled: bool
     entitled: bool
@@ -102,6 +111,7 @@ def list_marketplace(session: SessionDep) -> list[MarketplaceItemOut]:
         )
     for item in catalog.values():
         required_plan = item.get("required_plan") or None
+        package = str(item.get("package", "")).strip()
         items.append(
             MarketplaceItemOut(
                 id=str(item["id"]),
@@ -111,6 +121,8 @@ def list_marketplace(session: SessionDep) -> list[MarketplaceItemOut]:
                 required_plan=required_plan,
                 homepage=str(item.get("homepage", "")),
                 install_hint=str(item.get("install_hint", "")),
+                package=package,
+                installable=bool(package) and _runtime_install_available(),
                 installed=False,
                 enabled=False,
                 entitled=provider.is_entitled(required_plan),
@@ -121,7 +133,104 @@ def list_marketplace(session: SessionDep) -> list[MarketplaceItemOut]:
     return sorted(items, key=lambda item: item.id)
 
 
-@router.post("/unlock", response_model=UnlockOut)
+# --- runtime install ------------------------------------------------------------
+
+
+class InstallIn(BaseModel):
+    id: str
+
+
+class InstallOut(BaseModel):
+    id: str
+    installed: bool
+    #: Plugin ids whose routes were mounted live as a result of this install.
+    mounted: list[str]
+    message: str
+
+
+def _runtime_install_available() -> bool:
+    return settings.marketplace_allow_install and not getattr(sys, "frozen", False)
+
+
+def pip_install(requirement: str) -> tuple[bool, str]:
+    """Install a package into the running environment; prefer uv, else pip.
+
+    `--python sys.executable` pins uv to this exact interpreter, so the install
+    lands in the venv the app is actually running from.
+    """
+    uv = shutil.which("uv")
+    if uv:
+        cmd = [uv, "pip", "install", "--python", sys.executable, requirement]
+    else:
+        cmd = [sys.executable, "-m", "pip", "install", requirement]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return False, "Install timed out after 10 minutes."
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "unknown error").strip().splitlines()[-8:]
+        return False, "\n".join(tail)
+    return True, ""
+
+
+def find_catalog_item(item_id: str) -> dict | None:
+    return next(
+        (item for item in _load_catalog() if str(item.get("id", "")) == item_id), None
+    )
+
+
+@router.post("/install", response_model=InstallOut, dependencies=[Depends(require_admin)])
+def install(payload: InstallIn, request: Request, session: SessionDep) -> InstallOut:
+    """Install a catalog extension into the running app — no restart.
+
+    Installing executes the package's code in this environment, so it is opt-in
+    (APP_MARKETPLACE_ALLOW_INSTALL), admin-only when auth is on, and should only
+    be enabled where the catalog is vendor-controlled.
+    """
+    if getattr(sys, "frozen", False):
+        raise HTTPException(
+            status_code=400,
+            detail="This is a packaged desktop build — extensions are bundled at build time.",
+        )
+    if not settings.marketplace_allow_install:
+        raise HTTPException(
+            status_code=403,
+            detail="Runtime install is disabled. Set APP_MARKETPLACE_ALLOW_INSTALL=true.",
+        )
+    item = find_catalog_item(payload.id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Unknown catalog item: {payload.id}")
+    requirement = str(item.get("package", "")).strip()
+    if not requirement:
+        raise HTTPException(
+            status_code=400,
+            detail="This catalog item has no installable package — follow its install hint.",
+        )
+    required_plan = item.get("required_plan") or None
+    provider = licensing.get_license_provider()
+    if not provider.is_entitled(required_plan):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "license_required",
+                "current_plan": provider.current_plan(),
+                "required_plan": required_plan,
+            },
+        )
+    ok, error = pip_install(requirement)
+    if not ok:
+        raise HTTPException(status_code=502, detail=f"Install failed: {error}")
+    mounted = rescan_and_mount_new(request.app)
+    installed = build_registry(session).get(payload.id) is not None
+    message = (
+        f"'{payload.id}' installed and live — no restart needed."
+        if installed
+        else f"Package installed, but no plugin advertises id '{payload.id}' — check the catalog."
+    )
+    return InstallOut(id=payload.id, installed=installed, mounted=mounted, message=message)
+
+
+@router.post("/unlock", response_model=UnlockOut, dependencies=[Depends(require_admin)])
 def unlock(payload: UnlockIn) -> UnlockOut:
     """Verify a signed license token, persist it and apply it immediately."""
     token = payload.token.strip()

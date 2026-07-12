@@ -68,6 +68,10 @@ jobs:
         working-directory: ${{ runner.temp }}/gen
         run: pnpm install
 
+      - name: Typed client — drift gate (committed client matches the API)
+        working-directory: ${{ runner.temp }}/gen
+        run: uv run opk gen --check
+
       - name: Frontend — typecheck (against generated typed client)
         working-directory: ${{ runner.temp }}/gen
         run: pnpm -C apps/frontend typecheck

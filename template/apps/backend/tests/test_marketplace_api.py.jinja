@@ -84,3 +84,90 @@ def test_paid_plugin_routes_lock_and_unlock_without_restart(client, monkeypatch)
     resp = client.get("/api/ext/paid/summary")
     assert resp.status_code == 403
     assert resp.json()["detail"]["error"] == "license_required"
+
+
+# --- runtime install ------------------------------------------------------------
+
+
+def _catalog(tmp_path, monkeypatch, items: str) -> None:
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text('{"items": [' + items + "]}", encoding="utf-8")
+    monkeypatch.setattr(settings, "marketplace_catalog", str(catalog))
+
+
+def test_install_is_disabled_by_default(client) -> None:
+    resp = client.post("/api/marketplace/install", json={"id": "anything"})
+    assert resp.status_code == 403
+    # And the catalog reports nothing as installable.
+    assert all(not item["installable"] for item in client.get("/api/marketplace").json())
+
+
+def test_install_rejects_unknown_and_packageless_items(client, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(settings, "marketplace_allow_install", True)
+    _catalog(tmp_path, monkeypatch, '{"id": "example.hintonly", "install_hint": "uv add x"}')
+    assert client.post("/api/marketplace/install", json={"id": "nope"}).status_code == 404
+    resp = client.post("/api/marketplace/install", json={"id": "example.hintonly"})
+    assert resp.status_code == 400
+
+
+def test_install_enforces_entitlement(client, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(settings, "marketplace_allow_install", True)
+    _catalog(
+        tmp_path,
+        monkeypatch,
+        '{"id": "example.big", "required_plan": "enterprise", "package": "example-big"}',
+    )
+    # The dev stub grants pro; an enterprise item must refuse to install.
+    resp = client.post("/api/marketplace/install", json={"id": "example.big"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["error"] == "license_required"
+
+
+def test_install_refuses_inside_a_frozen_build(client, monkeypatch) -> None:
+    import sys
+
+    monkeypatch.setattr(settings, "marketplace_allow_install", True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    resp = client.post("/api/marketplace/install", json={"id": "example.reports"})
+    assert resp.status_code == 400
+
+
+@pytest.fixture()
+def uninstall_reports_after():
+    """The e2e test below really installs the demo plugin into this venv; put
+    the environment back so the suite stays rerunnable (`uv run` syncs
+    inexactly and would not prune it)."""
+    yield
+    import importlib
+    import shutil
+    import subprocess
+    import sys
+
+    from {{ pkg_slug }}_backend.plugins import discovered_plugins
+
+    uv = shutil.which("uv")
+    if uv:
+        cmd = [uv, "pip", "uninstall", "--python", sys.executable, "{{ pkg_slug }}-plugin-reports"]
+    else:
+        cmd = [sys.executable, "-m", "pip", "uninstall", "-y", "{{ pkg_slug }}-plugin-reports"]
+    subprocess.run(cmd, capture_output=True, timeout=120)
+    importlib.invalidate_caches()
+    discovered_plugins.cache_clear()
+
+
+def test_install_from_catalog_mounts_routes_live(
+    client, monkeypatch, uninstall_reports_after
+) -> None:
+    """End to end: pip-installs the bundled marketplace demo into this very
+    environment and expects its routes to answer with no restart. Needs uv or
+    pip on PATH — the same requirement the feature has.
+    """
+    monkeypatch.setattr(settings, "marketplace_allow_install", True)
+    # The default catalog already points at ./extensions/example-marketplace-plugin.
+    resp = client.post("/api/marketplace/install", json={"id": "example.reports"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["installed"] is True
+    # The plugin is discovered, entitled (dev stub grants pro) and serving.
+    assert client.get("/api/ext/reports/ping").status_code == 200
+    items = {item["id"]: item for item in client.get("/api/marketplace").json()}
+    assert items["example.reports"]["installed"] is True

@@ -50,6 +50,8 @@ uv run {{ cli_name }} desktop --check  # headless desktop smoke test
 {%- endif %}
 
 uv run {{ cli_name }} marketplace list # extension catalog + lock state
+uv run {{ cli_name }} user add <email> --admin   # accounts; enforced when APP_AUTH_ENABLED=true
+uv run {{ cli_name }} gen --check      # CI drift gate: committed client matches the API
 {%- if include_docker %}
 uv run {{ cli_name }} stack up         # full Docker stack on http://localhost:8080
 {%- if include_tunnel %}
@@ -90,6 +92,7 @@ Work strangler-style: build the new domain **next to** the demo (keep tests gree
 - **After any backend API change, run `uv run {{ cli_name }} gen`.** The frontend type errors you see are usually a stale generated client, not your bug.
 - Migrations auto-apply on backend startup and in tests; the schema's source of truth is `apps/backend/migrations/`, not the SQLModel classes.
 - Development licensing uses a stub granting the `pro` plan; set `APP_LICENSE_DEV_PLAN=free` to test locked states. Backend tests assume the stub.
+- Auth is a **runtime switch**, not a build variant: everything is open until `APP_AUTH_ENABLED=true`, then every API route needs a bearer session and operator actions (plugin toggles, unlock/install, users) need an admin. Don't add a second auth system — extend `apps/backend/src/{{ pkg_slug }}_backend/auth.py`.
 - Gate paid features with `Depends(require_plan("pro"))` / `require_feature(...)` on routes and `useEntitlement()` + `<LockedFeatureCard/>` in the UI (see the demo's `export.py` before deleting it).
 - The desktop shell loads the **built** UI: run `uv run {{ cli_name }} build web` before `{{ cli_name }} desktop`.
 - Prefer a plugin in `extensions/` over patching the framework when adding optional/sellable capabilities (entry-point group: `{{ pkg_slug }}.plugins`).

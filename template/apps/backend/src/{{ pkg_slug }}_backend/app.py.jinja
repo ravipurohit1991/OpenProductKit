@@ -3,17 +3,19 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.routes.auth import router as auth_router
 from .api.routes.export import router as export_router  # [demo]
 from .api.routes.license import router as license_router
 from .api.routes.marketplace import router as marketplace_router
 from .api.routes.notes import router as notes_router  # [demo]
 from .api.routes.plugins import router as plugins_router
 from .api.routes.projects import router as projects_router  # [demo]
+from .auth import enforce_auth
 from .db import upgrade_head
 from .plugins import mount_plugin_routers
 from .settings import settings
@@ -37,13 +39,20 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="{{ project_name }} API", lifespan=lifespan)
+    # `enforce_auth` is a no-op until APP_AUTH_ENABLED=true; then every API
+    # route (plugins included) requires a bearer session except the public few.
+    app = FastAPI(
+        title="{{ project_name }} API",
+        lifespan=lifespan,
+        dependencies=[Depends(enforce_auth)],
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(auth_router)
     app.include_router(projects_router)  # [demo]
     app.include_router(notes_router)  # [demo]
     app.include_router(plugins_router)

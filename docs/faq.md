@@ -22,11 +22,15 @@ Yes. The desktop app is an adapter around the same backend and core. If your pro
 
 ## Can I use another billing provider?
 
-Yes. OpenProductKit ships an entitlement abstraction, not a payment provider. You can validate licenses through your own HTTP endpoint backed by Stripe, Lemon Squeezy, Paddle or something custom.
+Yes. OpenProductKit ships an entitlement abstraction, not a payment provider. You can validate licenses through your own HTTP endpoint backed by Stripe, Lemon Squeezy, Paddle or something custom — [Payments](payments.md) has ready-made recipes for all three.
 
 ## Are plugins safe to install at runtime?
 
-Not yet. The current plugin model is dev-time Python package discovery through entry points. Runtime plugin installation and sandboxing are roadmap items.
+Plugins are Python packages: installing one runs its code with the app's privileges — there is no sandbox, by honesty rather than accident. That is why the runtime install path is off by default (`APP_MARKETPLACE_ALLOW_INSTALL`), admin-only under [auth](auth.md), and meant exclusively for vendor-controlled catalogs. See [Marketplace](marketplace.md#runtime-installs-opt-in). A real permission/sandbox model remains a roadmap item.
+
+## Does the template include user accounts?
+
+Yes, as a runtime switch aimed at hosted deployments: set `APP_AUTH_ENABLED=true` and every API route requires a login, with admin-gated operator actions. Desktop and local runs stay accountless by default. See [Auth & users](auth.md).
 
 ## Does the desktop app run a hidden web server?
 

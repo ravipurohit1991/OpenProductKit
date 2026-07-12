@@ -15,6 +15,9 @@ Generated OpenProductKit projects use environment variables prefixed with `APP_`
 | `APP_WEB_DIST` | Directory with the built web UI; served at `/` when it exists | `apps/frontend/dist` |
 | `APP_MARKETPLACE_CATALOG` | Local marketplace catalog file | `marketplace/catalog.json` |
 | `APP_MARKETPLACE_URL` | Hosted catalog URL (replaces the local file when set) | unset |
+| `APP_MARKETPLACE_ALLOW_INSTALL` | Allow installing catalog extensions from the running app ([details](marketplace.md#runtime-installs-opt-in)) | `false` |
+| `APP_AUTH_ENABLED` | Require user accounts on every API route ([details](auth.md)) | `false` |
+| `APP_AUTH_SESSION_DAYS` | Login session lifetime in days | `30` |
 
 Desktop mode sets `APP_DATABASE_URL` and `APP_LICENSE_FILE` to platform-specific app-data paths when they are not already set (the sidecar shells also set `APP_WEB_DIST`).
 

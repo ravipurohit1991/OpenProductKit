@@ -68,3 +68,9 @@ Docker, put your real `.env` next to it, `opk stack up`. From there:
   over the nginx split.
 - **Secrets**: never bake `.env` into images (the `.dockerignore` already
   refuses); pass it at runtime.
+- **Accounts**: anything public wants `APP_AUTH_ENABLED=true` — see
+  [Auth & users](auth.md).
+
+Host-specific walkthroughs — Fly.io, Railway, Cloud Run + Firebase Hosting,
+static frontend hosts, named Cloudflare tunnels — live in
+[Deploy recipes](deploy-recipes.md).

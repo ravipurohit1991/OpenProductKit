@@ -74,7 +74,8 @@ Responses are cached (default 5 min). If your server is unreachable, the **last
 good response keeps working** (offline grace) instead of locking paying
 customers out; a fresh install that has never validated stays `free`. Implement
 the endpoint in anything — including a few lines of FastAPI in your own
-license-server project, or a webhook layer over Stripe / Lemon Squeezy / Paddle.
+license-server project, or a webhook layer over Stripe / Lemon Squeezy /
+Paddle. [Payments](payments.md) has complete copy-paste recipes for all three.
 
 ## Gating things
 

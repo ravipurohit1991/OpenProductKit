@@ -23,6 +23,7 @@
 | `opk build desktop` | Package the desktop app into `./dist` (PyInstaller; plus electron-builder or `tauri build` for the sidecar shells). |
 | `opk openapi [-o path]` | Export the OpenAPI schema. |
 | `opk gen` | Regenerate the typed frontend client from the schema. |
+| `opk gen --check` | Drift gate: verify the committed client matches the API (used in CI). |
 
 ## Desktop
 
@@ -77,6 +78,18 @@ Installed, licensed plugins can also contribute their own commands — for examp
 | --- | --- |
 | `opk marketplace list` | Installed plugins + catalog items, with lock/install state. |
 | `opk marketplace unlock <token>` | Activate a license token and show the resulting entitlements. |
+| `opk marketplace install <id>` | Install a catalog extension into the current environment. |
+
+## Users
+
+Accounts for hosted deployments (enforced when `APP_AUTH_ENABLED=true` — see [Auth](auth.md)).
+
+| Command | Description |
+| --- | --- |
+| `opk user add <email> [--admin] [--password …]` | Create an account (prompts for the password if omitted). |
+| `opk user list` | List accounts. |
+| `opk user passwd <email>` | Reset a password (revokes that user's sessions). |
+| `opk user remove <email>` | Delete an account. |
 
 ## License
 

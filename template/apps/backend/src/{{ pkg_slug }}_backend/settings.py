@@ -16,11 +16,24 @@ class Settings(BaseSettings):
     # used by the desktop sidecar shells and single-container deployments.
     web_dist: str = "apps/frontend/dist"
 
+    # --- auth (see auth.py) -----------------------------------------------------
+    # Optional user accounts for hosted deployments. Off by default: the
+    # desktop/local story has no accounts. When on, every API route except
+    # health/login/setup/me requires a bearer session, and operator actions
+    # (plugin toggles, marketplace unlock/install, user management) need admin.
+    auth_enabled: bool = False
+    # How long a login session stays valid.
+    auth_session_days: int = 30
+
     # --- marketplace (see api/routes/marketplace) ------------------------------
     # Local catalog of available extensions shown in the Marketplace tab.
     marketplace_catalog: str = "marketplace/catalog.json"
     # Optional vendor-hosted catalog URL; when set it replaces the local file.
     marketplace_url: str = ""
+    # Allow installing catalog extensions from the running app (Marketplace
+    # "Install" button / POST /api/marketplace/install). Installing runs pip in
+    # the app's environment — enable it only where the catalog is trusted.
+    marketplace_allow_install: bool = False
 
     # --- licensing (see packages/licensing) -----------------------------------
     # The vendor's Ed25519 public key (base64url). Bake it in here or set

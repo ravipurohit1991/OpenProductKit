@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { client } from "./client";
+import { client, setAuthToken } from "./client";
 import type { components } from "./schema";
 
 // --- [demo] Resource Vault hooks — replace with hooks for your own API --------
@@ -101,6 +101,102 @@ export function usePlugins() {
   });
 }
 
+// --- auth (framework — keep) ---------------------------------------------------
+// Inert until the deployment sets APP_AUTH_ENABLED=true; /api/auth/me then
+// drives the AuthGate (login / first-run setup) around the whole app.
+
+export type AuthStatus = components["schemas"]["AuthStatusOut"];
+export type AuthUser = components["schemas"]["UserOut"];
+
+export function useAuthStatus() {
+  return useQuery({
+    queryKey: ["auth", "me"],
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await client.GET("/api/auth/me");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
+function useCredentialMutation(path: "/api/auth/login" | "/api/auth/setup") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (creds: { email: string; password: string }) => {
+      const { data, error } = await client.POST(path, { body: creds });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: (data) => {
+      setAuthToken(data.token);
+      qc.clear(); // every cached query was fetched unauthenticated — refetch all
+    },
+  });
+}
+
+export function useLogin() {
+  return useCredentialMutation("/api/auth/login");
+}
+
+// First-run bootstrap: creates the initial admin account, then logs it in.
+export function useSetup() {
+  return useCredentialMutation("/api/auth/setup");
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await client.POST("/api/auth/logout");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSettled: () => {
+      setAuthToken(null);
+      qc.clear();
+    },
+  });
+}
+
+export function useUsers(enabled: boolean) {
+  return useQuery({
+    queryKey: ["auth", "users"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await client.GET("/api/auth/users");
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { email: string; password: string; is_admin: boolean }) => {
+      const { data, error } = await client.POST("/api/auth/users", { body: input });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "users"] }),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await client.DELETE("/api/auth/users/{user_id}", {
+        params: { path: { user_id: userId } },
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "users"] }),
+  });
+}
+
 // --- marketplace (framework — keep) -------------------------------------------
 
 export type MarketplaceItem = components["schemas"]["MarketplaceItemOut"];
@@ -112,6 +208,25 @@ export function useMarketplace() {
       const { data, error } = await client.GET("/api/marketplace");
       if (error) throw new Error(JSON.stringify(error));
       return data;
+    },
+  });
+}
+
+// Install a catalog extension into the running app (only offered when the
+// server reports it installable). New plugin routes mount live — no restart.
+export function useInstallExtension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await client.POST("/api/marketplace/install", {
+        body: { id },
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["marketplace"] });
+      qc.invalidateQueries({ queryKey: ["plugins"] });
     },
   });
 }

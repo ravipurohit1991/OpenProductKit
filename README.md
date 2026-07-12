@@ -20,7 +20,7 @@ OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives 
 
 The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
 
-**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [deployment](docs/deployment.md) | [roadmap](docs/roadmap.md)
+**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
 
 ---
 
@@ -33,8 +33,11 @@ Most templates get you a web app or a desktop shell. OpenProductKit is meant for
 - **Commercial hooks included:** signed offline license tokens, file/HTTP providers, vendor commands and route/UI gates.
 - **Plugin-ready:** Python entry-point plugins can add backend routes, CLI commands, settings, health checks and admin UI.
 - **A marketplace, not just plugins:** a catalog tab where users install extensions and unlock paid ones with a license token — live, no restart.
+- **Hosted-ready auth:** flip `APP_AUTH_ENABLED=true` and the same build grows accounts, sessions and admin gates; desktop/local stays accountless.
+- **Payments are a recipe away:** documented Stripe / Lemon Squeezy / Paddle flows turn checkout into license tokens with ~100 lines.
 - **One-command deploy:** `stack up` runs nginx + backend (+ PostgreSQL) in Docker; `stack share` puts a public Cloudflare URL on your dev stack.
-- **Generated typed client:** frontend API types come from the backend OpenAPI schema.
+- **Release CI included:** push a version tag and GitHub Actions builds desktop installers for all three OSes onto a GitHub Release.
+- **Generated typed client:** frontend API types come from the backend OpenAPI schema, with a CI drift gate.
 - **Agent-ready rework path:** the demo domain is fenced with `[demo]` markers, and generated projects include `AGENTS.md` and `CLAUDE.md`.
 
 ## Quickstart
@@ -86,7 +89,9 @@ If you changed `cli_name` during generation, replace `opk` with your generated c
 | Licensing | Dev stub, signed offline tokens, file provider, HTTP provider and feature gates |
 | Plugins | Entry-point plugin SDK with backend, CLI, settings, health and license support |
 | Marketplace | Catalog + unlock-with-token flow: users see, install and unlock paid extensions |
-| Deployment | `stack up` Docker stack (nginx + backend + optional PostgreSQL), `stack share` Cloudflare tunnel |
+| Auth | Optional user accounts (runtime switch), sessions, first-run admin setup, Users admin tab and CLI |
+| Deployment | `stack up` Docker stack (nginx + backend + optional PostgreSQL), `stack share` Cloudflare tunnel, host recipes |
+| Releases | Tag-triggered CI building per-OS desktop installers onto GitHub Releases |
 | Docs | MkDocs Material site with GitHub Pages and Read the Docs config |
 | CI | Linux and Windows checks for backend, frontend and generated project behavior |
 
