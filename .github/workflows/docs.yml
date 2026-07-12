@@ -1,8 +1,9 @@
 name: Deploy docs
 
-# Manual trigger so it never fails a run before GitHub Pages is enabled.
-# Enable Pages (Settings → Pages → Source: GitHub Actions), then run this.
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
