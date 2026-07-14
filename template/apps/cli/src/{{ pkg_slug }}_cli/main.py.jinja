@@ -9,6 +9,7 @@ Command groups:
   {{ cli_name }} build …     build artifacts
   {{ cli_name }} license …   license status/install + vendor keygen/issue
   {{ cli_name }} marketplace …  browse the extension catalog, unlock with a token
+  {{ cli_name }} product …   connect and validate existing core/backend code
 {%- if include_docker %}
   {{ cli_name }} stack …     the Docker stack: up / down / logs{% if include_tunnel %} / share{% endif %}
 {%- endif %}
@@ -24,6 +25,7 @@ import sys
 from pathlib import Path
 
 import typer
+from fastapi.routing import APIRoute
 from sqlmodel import Session
 
 from {{ pkg_slug }}_backend.adapters.db.engine import engine
@@ -35,6 +37,10 @@ from {{ pkg_slug }}_backend.adapters.db.repository import (  # [demo]
 from {{ pkg_slug }}_backend.db import downgrade, make_revision, upgrade_head
 from {{ pkg_slug }}_backend.licensing import get_license_provider
 from {{ pkg_slug }}_backend.plugins import build_registry
+from {{ pkg_slug }}_backend.product import (
+    ProductRouterError,
+    load_product_routers,
+)
 from {{ pkg_slug }}_core.errors import CoreError
 from {{ pkg_slug }}_core.services.notes import NoteService  # [demo]
 from {{ pkg_slug }}_core.services.projects import ProjectService  # [demo]
@@ -62,6 +68,9 @@ license_app = typer.Typer(
 user_app = typer.Typer(
     help="Manage user accounts (enforced when APP_AUTH_ENABLED is on).", no_args_is_help=True
 )
+product_app = typer.Typer(
+    help="Connect and validate your existing core or backend.", no_args_is_help=True
+)
 {%- if include_docker %}
 stack_app = typer.Typer(
     help="Run the whole product as a Docker stack (backend + web{% if database == 'postgres' %} + postgres{% endif %}).",
@@ -77,6 +86,7 @@ app.add_typer(plugin_app, name="plugin")
 app.add_typer(marketplace_app, name="marketplace")
 app.add_typer(license_app, name="license")
 app.add_typer(user_app, name="user")
+app.add_typer(product_app, name="product")
 {%- if include_docker %}
 app.add_typer(stack_app, name="stack")
 {%- endif %}
@@ -215,6 +225,28 @@ def doctor() -> None:
     typer.echo("\nAll good.")
 
 
+@product_app.command("check")
+def product_check() -> None:
+    """Validate APP_PRODUCT_ROUTERS and show the endpoints they contribute."""
+    from {{ pkg_slug }}_backend.settings import settings
+
+    try:
+        loaded = load_product_routers(settings.product_routers)
+    except ProductRouterError as exc:
+        typer.echo(f"[ERROR] {exc}", err=True)
+        raise typer.Exit(1) from exc
+    if not loaded:
+        typer.echo("No product routers configured.")
+        typer.echo("Set APP_PRODUCT_ROUTERS=your_package.api:router")
+        return
+    for item in loaded:
+        routes = [route for route in item.router.routes if isinstance(route, APIRoute)]
+        typer.echo(f"[OK] {item.target} ({len(routes)} API route(s))")
+        for route in routes:
+            methods = ",".join(sorted(route.methods or []))
+            typer.echo(f"  {methods:<12} {route.path}")
+
+
 @app.command()
 def test() -> None:
     """Run the Python test suite."""
@@ -346,14 +378,18 @@ def build_web() -> None:
 
 
 {%- if desktop_framework != 'none' %}
-def _plugin_bundle_args() -> list[str]:
-    """PyInstaller args that carry installed plugins into the frozen build.
+def _dynamic_bundle_args() -> list[str]:
+    """PyInstaller args that carry dynamically imported code into a frozen build.
 
     Entry-point discovery inside the bundle needs each plugin's dist-info
     (--copy-metadata) and its module frozen in (--hidden-import) — PyInstaller's
-    static analysis cannot see either on its own.
+    static analysis cannot see either on its own. Product routers are also
+    import-string driven, so their configured modules need hidden imports.
     """
     from importlib import metadata
+
+    from {{ pkg_slug }}_backend.product import parse_product_router_targets
+    from {{ pkg_slug }}_backend.settings import settings
 
     args: list[str] = []
     for dist in metadata.distributions():
@@ -363,6 +399,10 @@ def _plugin_bundle_args() -> list[str]:
         args += ["--copy-metadata", dist.metadata["Name"]]
         for ep in plugin_eps:
             args += ["--hidden-import", ep.module]
+    for target in parse_product_router_targets(settings.product_routers):
+        module_name = target.partition(":")[0].strip()
+        if module_name:
+            args += ["--hidden-import", module_name]
     return args
 {%- endif %}
 
@@ -411,9 +451,9 @@ def build_desktop() -> None:
                 "logging.handlers",
                 "--collect-all",
                 "webview",
-                # Installed plugins: metadata + modules, so entry-point
-                # discovery keeps working inside the frozen build.
-                *_plugin_bundle_args(),
+                # Plugins and configured product routers are imported
+                # dynamically, so static analysis needs explicit hints.
+                *_dynamic_bundle_args(),
                 str(root / "apps" / "desktop" / "src" / "{{ pkg_slug }}_desktop" / "main.py"),
             ]
         )
@@ -455,9 +495,9 @@ def _build_server_sidecar(*, name: str, entry: str, onefile: bool) -> int:
             "logging.config",
             "--hidden-import",
             "logging.handlers",
-            # Installed plugins: metadata + modules, so entry-point discovery
-            # keeps working inside the frozen build.
-            *_plugin_bundle_args(),
+            # Plugins and configured product routers are imported dynamically,
+            # so static analysis needs explicit hints.
+            *_dynamic_bundle_args(),
             str(root / entry),
         ]
     )

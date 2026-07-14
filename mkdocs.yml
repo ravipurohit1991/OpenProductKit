@@ -37,6 +37,7 @@ nav:
       - Installation: installation.md
       - Quickstart: quickstart.md
       - Generate a project: generating.md
+      - Bring your own code: bring-your-own-code.md
       - Make it yours: replace-the-demo.md
       - Rebranding & updates: rebranding.md
   - Concepts:

@@ -9,11 +9,13 @@ flowchart LR
     cli["apps/cli<br/>{{ cli_name }}"]
     fe["apps/frontend<br/>React + typed client"]
     dt["apps/desktop<br/>pywebview shell"]
+    existing["existing core / FastAPI backend"]
 
     cli --> core
     be --> core
     fe -->|HTTP| be
     dt -->|in-process bridge| be
+    existing -->|product router| be
 ```
 
 | Layer | Responsibility |
@@ -25,5 +27,9 @@ flowchart LR
 | `apps/desktop` | Native window over the same UI; API calls dispatched in-process (no HTTP). |
 | `packages/licensing` | Entitlement: dev stub, signed offline tokens, file/HTTP providers. |
 | `packages/plugin-api`, `extensions/` | The plugin SDK and example plugins. |
+
+Existing first-party code enters through `APP_PRODUCT_ROUTERS`; its endpoints
+become part of the backend and OpenAPI schema without moving that code into the
+template. See [Bring your own code](bring-your-own-code.md).
 
 To extend the app, prefer a **plugin** (see `extensions/`) over editing the core.

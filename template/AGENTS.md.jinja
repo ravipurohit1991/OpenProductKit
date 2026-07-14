@@ -6,7 +6,7 @@ Your most likely job here: **replace the bundled "Resource Vault" demo domain (p
 
 ## The one rule
 
-**Business logic never leaves `packages/core`.** FastAPI, Typer, React and the desktop shell are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service. The core imports nothing but the standard library.
+**Business logic authored in this repository never leaves `packages/core`.** FastAPI, Typer, React and the desktop shell are delivery mechanisms. If you are writing an `if` that encodes a product decision inside a route, a CLI command or a React component, stop and move it into a core service. The core imports nothing but the standard library. Existing code connected through `APP_PRODUCT_ROUTERS` is an explicit boundary: preserve its own architecture instead of copying its internals into generated adapters.
 
 ## Layout
 
@@ -52,6 +52,7 @@ uv run {{ cli_name }} desktop --check  # headless desktop smoke test
 uv run {{ cli_name }} marketplace list # extension catalog + lock state
 uv run {{ cli_name }} user add <email> --admin   # accounts; enforced when APP_AUTH_ENABLED=true
 uv run {{ cli_name }} gen --check      # CI drift gate: committed client matches the API
+uv run {{ cli_name }} product check    # validate adapters for existing core/backend code
 {%- if include_docker %}
 uv run {{ cli_name }} stack up         # full Docker stack on http://localhost:8080
 {%- if include_tunnel %}
@@ -61,6 +62,10 @@ uv run {{ cli_name }} stack share      # same + a public trycloudflare.com URL
 ```
 
 ## The demo fence
+
+If the owner already has a core package or FastAPI backend, read
+`docs/bring-your-own-code.md` before replacing the demo. Prefer the stable
+`APP_PRODUCT_ROUTERS` seam over copying first-party code into framework files.
 
 Every line of demo code carries a `[demo]` marker:
 

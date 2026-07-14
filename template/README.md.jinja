@@ -24,7 +24,26 @@ extensions/          Example plugins (basic, cli, paid, and the on-demand market
 marketplace/         catalog.json — what the Marketplace tab offers beyond installed plugins.
 ```
 
-Business logic lives only in `packages/core`. Everything else is a delivery mechanism.
+For product code authored here, business logic lives in `packages/core` and
+everything else is a delivery mechanism. An imported backend can retain its
+own internal architecture behind the product-router boundary.
+
+## Bring your own core or backend
+
+You do not have to reshape existing product code into the demo. Connect an
+existing FastAPI router/app—or a thin router factory around an existing core—
+through one import setting:
+
+```bash
+APP_PRODUCT_ROUTERS=my_backend.api:router
+uv run {{ cli_name }} product check
+uv run {{ cli_name }} gen
+```
+
+The imported endpoints join this product's OpenAPI schema, typed frontend
+client, auth boundary, desktop transport and deployment. See
+[`docs/bring-your-own-code.md`](docs/bring-your-own-code.md) for both adoption
+paths and the contract's deliberate limits.
 
 ## The demo: a small Resource Vault (replace it!)
 

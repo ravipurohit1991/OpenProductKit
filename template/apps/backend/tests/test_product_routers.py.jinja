@@ -1,0 +1,82 @@
+"""Bring-your-own-code product routers join every generated product surface."""
+
+from __future__ import annotations
+
+import sys
+from types import ModuleType
+
+import pytest
+from fastapi import APIRouter, FastAPI
+from fastapi.testclient import TestClient
+
+from {{ pkg_slug }}_backend.app import create_app
+from {{ pkg_slug }}_backend.product import ProductRouterError, load_product_routers
+from {{ pkg_slug }}_backend.settings import settings
+
+
+def _module_with(**attributes: object) -> ModuleType:
+    module = ModuleType("test_product_code")
+    for name, value in attributes.items():
+        setattr(module, name, value)
+    return module
+
+
+def test_configured_router_joins_api_and_openapi(monkeypatch) -> None:
+    router = APIRouter(prefix="/api/todos", tags=["product:todos"])
+
+    @router.get("")
+    def list_todos() -> list[dict[str, str]]:
+        return [{"title": "Ship the product"}]
+
+    monkeypatch.setitem(sys.modules, "test_product_code", _module_with(router=router))
+    monkeypatch.setattr(settings, "product_routers", "test_product_code:router")
+
+    with TestClient(create_app()) as client:
+        assert client.get("/api/todos").json() == [{"title": "Ship the product"}]
+        assert "/api/todos" in client.get("/openapi.json").json()["paths"]
+
+
+def test_fastapi_app_and_factory_are_supported(monkeypatch) -> None:
+    external = FastAPI()
+
+    @external.get("/api/from-existing-backend")
+    def from_existing_backend() -> dict[str, bool]:
+        return {"connected": True}
+
+    def create_router() -> APIRouter:
+        router = APIRouter()
+
+        @router.get("/api/from-core-adapter")
+        def from_core_adapter() -> dict[str, bool]:
+            return {"connected": True}
+
+        return router
+
+    monkeypatch.setitem(
+        sys.modules,
+        "test_product_code",
+        _module_with(existing_app=external, create_router=create_router),
+    )
+    loaded = load_product_routers(
+        "test_product_code:existing_app, test_product_code:create_router, "
+        "test_product_code:create_router"
+    )
+
+    assert [item.target for item in loaded] == [
+        "test_product_code:existing_app",
+        "test_product_code:create_router",
+    ]
+    assert [route.path for item in loaded for route in item.router.routes] == [
+        "/api/from-existing-backend",
+        "/api/from-core-adapter",
+    ]
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["not-an-import", "test_product_code:missing", "test_product_code:not_a_router"],
+)
+def test_invalid_product_router_fails_with_actionable_error(monkeypatch, target) -> None:
+    monkeypatch.setitem(sys.modules, "test_product_code", _module_with(not_a_router=object()))
+    with pytest.raises(ProductRouterError, match="Product router|Invalid product router"):
+        load_product_routers(target)

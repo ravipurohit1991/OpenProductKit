@@ -32,6 +32,10 @@ Plugins are Python packages: installing one runs its code with the app's privile
 
 Yes, as a runtime switch aimed at hosted deployments: set `APP_AUTH_ENABLED=true` and every API route requires a login, with admin-gated operator actions. Desktop and local runs stay accountless by default. See [Auth & users](auth.md).
 
+## Can I start from an existing core or FastAPI backend?
+
+Yes. `APP_PRODUCT_ROUTERS` connects existing FastAPI routers/apps directly, or a thin router factory around a framework-free core. Those endpoints join the generated OpenAPI client, web/desktop transport and deployment stack. See [Bring your own core or backend](bring-your-own-code.md).
+
 ## Does the desktop app run a hidden web server?
 
 No. It loads the built web UI in a native window and dispatches API requests to the FastAPI app in the same process through a bridge.

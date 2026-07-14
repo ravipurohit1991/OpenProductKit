@@ -1,0 +1,73 @@
+# Bring your own core or backend
+
+This generated product can wrap existing first-party code without moving it
+into the Resource Vault demo. Configure `APP_PRODUCT_ROUTERS` with one or more
+Python import targets; their endpoints join this backend's OpenAPI schema,
+typed frontend client, auth boundary, desktop transport and deployment.
+
+## Existing FastAPI backend
+
+Make the existing package a backend dependency, then point at an `APIRouter`,
+router factory, or `FastAPI` app:
+
+```bash
+uv add --package {{ pkg_slug }}-backend --editable ../my-existing-backend
+
+APP_PRODUCT_ROUTERS=my_backend.api:router
+uv run {{ cli_name }} product check
+uv run {{ cli_name }} dev
+uv run {{ cli_name }} gen
+```
+
+An editable path outside the repo is convenient for development. For CI,
+Docker and releases, include that dependency in the checkout/build context or
+publish it to your package index.
+
+Multiple targets are comma-separated. Prefer an `APIRouter` with paths under
+`/api`. A full `FastAPI` app is accepted, but only its API endpoints are
+imported; its middleware, lifespan, docs and static mounts remain its own and
+are not merged into this host.
+
+## Existing core package
+
+Keep the core unchanged and add a thin HTTP adapter:
+
+```python
+# apps/backend/src/{{ pkg_slug }}_backend/product_adapter.py
+from fastapi import APIRouter
+
+from my_core import TaskService
+
+
+def create_router() -> APIRouter:
+    service = TaskService(...)  # wire your existing ports here
+    router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+    @router.get("")
+    def list_tasks():
+        return service.list()
+
+    return router
+```
+
+```bash
+APP_PRODUCT_ROUTERS={{ pkg_slug }}_backend.product_adapter:create_router
+uv run {{ cli_name }} product check
+uv run {{ cli_name }} gen
+```
+
+Business rules stay in the core. The factory owns dependency construction and
+the route owns HTTP translation. Once OpenAPI is regenerated, add thin React
+hooks/views over the generated types; desktop and deployment require no
+domain-specific changes.
+
+Frozen desktop builds add the configured modules as PyInstaller hidden imports.
+Build with the same `APP_PRODUCT_ROUTERS` value the packaged app will use.
+
+## Pick the right seam
+
+| Seam | Best for |
+| --- | --- |
+| `APP_PRODUCT_ROUTERS` | Existing first-party core/backend code |
+| Plugin SDK | Optional or third-party extensions |
+| `[demo]` replacement recipe | Building a new native domain across every adapter |

@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # used by the desktop sidecar shells and single-container deployments.
     web_dist: str = "apps/frontend/dist"
 
+    # --- bring your own product code (see product.py) -------------------------
+    # Comma-separated import targets. Each may be a FastAPI APIRouter/app or a
+    # zero-argument router factory, e.g. "acme.api:router,acme.admin:create_router".
+    product_routers: str = ""
+
     # --- auth (see auth.py) -----------------------------------------------------
     # Optional user accounts for hosted deployments. Off by default: the
     # desktop/local story has no accounts. When on, every API route except
