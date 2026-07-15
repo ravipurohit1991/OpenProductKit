@@ -18,9 +18,9 @@
 
 OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives you a runnable, rebrandable, extensible product repository. Generate it, answer a few questions, and start from a working app with plugins, licensing, generated clients, docs, tests and CI already wired in.
 
-The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
+The native architecture keeps **business logic in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product. Existing products can instead connect at a stable FastAPI boundary and retain their own internal architecture.
 
-**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
+**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [bring your own code](docs/bring-your-own-code.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
 
 **Brand assets:** [banner](docs/assets/brand/openproductkit-banner.svg) | [wordmark](docs/assets/brand/openproductkit-logo.svg) | [favicon](docs/assets/brand/openproductkit-favicon.svg)
 
@@ -31,6 +31,7 @@ The key idea is simple: **business logic lives in a framework-free core**. Web, 
 Most templates get you a web app or a desktop shell. OpenProductKit is meant for product builders who need the same core product to show up in more than one place.
 
 - **One core, many adapters:** pure Python domain logic with FastAPI, Typer, React and desktop surfaces around it.
+- **Bring your own code:** connect an existing FastAPI router/app—or wrap an existing core with one router factory—and inherit OpenAPI types, web/desktop transport and deployment without rewriting the product.
 - **Desktop without a sidecar:** the web UI runs in a native window and calls the app in-process, with no hidden HTTP server or port race.
 - **Commercial hooks included:** signed offline license tokens, file/HTTP providers, vendor commands and route/UI gates.
 - **Plugin-ready:** Python entry-point plugins can add backend routes, CLI commands, settings, health checks and admin UI.
@@ -85,6 +86,7 @@ If you changed `cli_name` during generation, replace `opk` with your generated c
 | --- | --- |
 | Core | Framework-free Python domain package with models, ports, services and tests |
 | Backend | FastAPI, SQLModel persistence, Alembic migrations and OpenAPI |
+| Existing code | Import-target seam for first-party FastAPI routers/apps and core adapter factories |
 | CLI | Typer command surface for dev, DB, builds, docs, plugins, licensing and the Docker stack |
 | Frontend | React + Vite UI over generated TypeScript API types |
 | Desktop | Your pick of **pywebview** (in-process), **Electron** or **Tauri** (sidecar) — one CLI surface for all |
@@ -148,6 +150,7 @@ Shipped:
 - Marketplace: extension catalog + unlock-with-license-token, applied without restart
 - One-command Docker stack (nginx + backend + optional PostgreSQL) and `stack share` Cloudflare quick tunnel
 - Agent-ready rework path with `[demo]` markers and generated agent instructions
+- Bring-your-own-code adapters for existing core packages and FastAPI backends
 - MkDocs Material docs site
 
 Next:

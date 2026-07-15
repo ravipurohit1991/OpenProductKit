@@ -26,6 +26,7 @@ See [Quickstart](quickstart.md) for the full first run, including the web UI and
 | --- | --- |
 | Core | Pure Python domain package with no framework dependencies |
 | Backend | FastAPI, SQLModel persistence, Alembic migrations, OpenAPI |
+| Existing code | [Bring your own core or FastAPI backend](bring-your-own-code.md) through a stable product-router seam |
 | CLI | Typer command surface for dev, DB, docs, builds, plugins and licensing |
 | Frontend | React + Vite over a generated typed client |
 | Desktop | pywebview shell that calls the app in-process, with no HTTP sidecar |
@@ -44,6 +45,7 @@ Most templates stop at "web" or "desktop". OpenProductKit's wedge is **breadth +
 - **Real licensing.** Ed25519 signed offline tokens, file/HTTP providers, vendor tooling, route gates and a frontend lock card.
 - **A real plugin system.** Python entry-point plugins can contribute backend routes, CLI commands, settings and admin UI.
 - **A generated typed client.** The web UI never hand-writes API types; they come from the backend's OpenAPI schema.
+- **An adoption seam, not a rewrite demand.** Existing FastAPI endpoints plug in directly; existing cores need only a thin router factory before every outer surface can use them.
 - **A CLI that is the control plane.** `opk` runs the app, migrations, builds, client generation, docs, plugin management and licensing.
 - **Designed to be reworked.** The demo domain is fenced with grep-able `[demo]` markers and every generated project ships agent instructions rendered with your actual names.
 

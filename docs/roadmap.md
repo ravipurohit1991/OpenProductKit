@@ -39,6 +39,10 @@
 - [x] **Generated-client drift gate** — `opk gen --check` in both the generated project's CI and this repo's CI. Unblocked by pinning `openapi-typescript` exactly — the format-drift concern was real, so the pin is the fix, not hope.
 - [x] **Deploy recipes** — [copy-paste starts](deploy-recipes.md) for Fly.io, Railway, Cloud Run (+ optional Firebase Hosting front), static hosts with `/api` proxying, VPS + Caddy, and named Cloudflare tunnels — recipes in docs, zero new host lock-in in the template.
 
+## Milestone 6 — adopt existing code (shipped)
+
+- [x] **Bring your own code** — `APP_PRODUCT_ROUTERS` imports existing FastAPI routers/apps or thin factories around an existing core. Routes join OpenAPI, generated clients, auth, desktop and deployment; `opk product check` validates the contract. See [Bring your own core or backend](bring-your-own-code.md).
+
 ## Next
 
 - **Plugin permissions & sandboxing** — enforce the manifest's declared `permissions` (today they are informational): restrict network/filesystem where feasible, and explore process isolation for untrusted extensions.

@@ -10,7 +10,7 @@ grep -rn "\[demo\]" packages apps
 
 That is the complete list of code to replace or trim. Everything unmarked — licensing, plugins, the desktop bridge, the CLI control plane, migrations tooling, the typed-client pipeline — is framework and works unchanged with *any* domain.
 
-Generated projects also ship an **`AGENTS.md`** with a condensed version of this recipe, pre-rendered with your project's actual package and CLI names, so an AI coding agent (Claude Code, Cursor, Codex, …) can do the rework for you. "Generate the project, describe your product to your agent, review the diff" is the intended workflow.
+Generated projects also ship an **`AGENTS.md`** with a condensed version of this recipe, pre-rendered with your project's actual package and CLI names, so an AI coding agent (Claude Code, Cursor, Codex, …) can do the rework for you. "Generate the project, describe your product to your agent, review the diff" is the intended workflow. If that product already exists as a core package or FastAPI backend, use the lighter [bring-your-own-code path](bring-your-own-code.md) before considering a rewrite.
 
 !!! example "A complete worked example"
     [Tally](https://github.com/ravipurohit1991/tally-time-tracker) — a freelancer

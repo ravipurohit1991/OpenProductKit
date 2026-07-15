@@ -1,6 +1,6 @@
 # Architecture
 
-The single rule that keeps this template honest: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core.
+The rule for product code authored in this template: **business logic never leaks into FastAPI, Typer, or React.** Those are delivery mechanisms. Swap any of them without touching the core. Existing backends connected through the product-router boundary may retain their own internal architecture; the host does not copy or reinterpret their logic.
 
 ```mermaid
 flowchart TD
@@ -31,6 +31,7 @@ flowchart TD
     PL -->|entry points| PA
     BE -->|discovers| PA
     BE -->|gates on| LIC
+    BYO[Existing core / FastAPI backend] -->|product router| BE
 ```
 
 ## The layers
@@ -45,6 +46,11 @@ flowchart TD
 | `apps/frontend` | React + Vite web UI over a generated typed client. | backend (HTTP or desktop bridge) |
 | `apps/desktop` | pywebview shell; the same app called in-process (no HTTP). | backend, frontend build |
 | `extensions/*` | Example plugins. | plugin-api (+ backend for the paid one) |
+
+Existing first-party code can enter at the backend adapter through a
+[product router](bring-your-own-code.md). That seam is intentionally separate
+from plugins: it adopts the code that *is* the product without requiring an
+extension manifest or copying it into template-owned modules.
 
 ## Why hexagonal here
 

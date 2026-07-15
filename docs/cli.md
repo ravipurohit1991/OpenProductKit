@@ -24,6 +24,7 @@
 | `opk openapi [-o path]` | Export the OpenAPI schema. |
 | `opk gen` | Regenerate the typed frontend client from the schema. |
 | `opk gen --check` | Drift gate: verify the committed client matches the API (used in CI). |
+| `opk product check` | Validate `APP_PRODUCT_ROUTERS` and list the endpoints supplied by existing product code. |
 
 ## Desktop
 

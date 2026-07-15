@@ -4,6 +4,7 @@ OpenProductKit is currently pre-1.0. The template and generated packages are ver
 
 ## Unreleased — Milestone 5
 
+- Bring-your-own-code product routers: import existing FastAPI routers/apps or factories around an existing core, validate them with `opk product check`, and include them in the host OpenAPI and all delivery surfaces
 - Optional user accounts as a runtime switch (`APP_AUTH_ENABLED`): scrypt passwords, hashed bearer sessions, first-run admin setup, a Users admin tab, a `user` CLI group, and admin-gated operator actions
 - Runtime marketplace installs (`POST /api/marketplace/install`, `marketplace install` CLI): opt-in via `APP_MARKETPLACE_ALLOW_INSTALL`, live route mounting without a restart
 - Frozen desktop builds bundle installed plugins (`--copy-metadata` + hidden imports)

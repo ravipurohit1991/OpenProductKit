@@ -18,6 +18,7 @@ from .api.routes.projects import router as projects_router  # [demo]
 from .auth import enforce_auth
 from .db import upgrade_head
 from .plugins import mount_plugin_routers
+from .product import mount_product_routers
 from .settings import settings
 
 _INDEX = """<!doctype html>
@@ -59,6 +60,9 @@ def create_app() -> FastAPI:
     app.include_router(license_router)
     app.include_router(marketplace_router)
     app.include_router(export_router)  # [demo]
+    # First-party product APIs supplied by an existing core/backend. They join
+    # this app's OpenAPI schema and inherit its auth and every delivery surface.
+    mount_product_routers(app, settings.product_routers)
     # Mount routes contributed by installed plugins (gated per-request).
     mount_plugin_routers(app)
 

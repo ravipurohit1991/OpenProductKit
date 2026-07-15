@@ -7,6 +7,7 @@ Generated OpenProductKit projects use environment variables prefixed with `APP_`
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `APP_DATABASE_URL` | SQLAlchemy database URL | Local SQLite database |
+| `APP_PRODUCT_ROUTERS` | Comma-separated import targets for [existing core/backend adapters](bring-your-own-code.md) | unset |
 | `APP_LICENSE_DEV_PLAN` | Development stub plan | `pro` |
 | `APP_LICENSE_PUBLIC_KEY` | Ed25519 public key used to verify signed license tokens | unset |
 | `APP_LICENSE_TOKEN` | Signed license token supplied directly | unset |
