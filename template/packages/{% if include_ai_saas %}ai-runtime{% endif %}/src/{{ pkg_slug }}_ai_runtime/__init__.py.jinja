@@ -1,0 +1,22 @@
+"""Provider-neutral AI job, metering and state-transition primitives."""
+
+from .domain import (
+    GenerationJob,
+    GenerationRequest,
+    JobStatus,
+    ProviderResult,
+    ProviderResultStatus,
+)
+from .ports import AIProvider
+from .services import InvalidTransitionError, transition
+
+__all__ = [
+    "AIProvider",
+    "GenerationJob",
+    "GenerationRequest",
+    "InvalidTransitionError",
+    "JobStatus",
+    "ProviderResult",
+    "ProviderResultStatus",
+    "transition",
+]

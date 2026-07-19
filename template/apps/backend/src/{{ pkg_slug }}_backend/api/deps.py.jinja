@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlmodel import Session
 
 from {{ pkg_slug }}_core.services.notes import NoteService
@@ -16,6 +16,7 @@ from {{ pkg_slug }}_core.services.projects import ProjectService
 
 from ..adapters.db.engine import get_session
 from ..adapters.db.repository import SqlNoteRepository, SqlProjectRepository
+from ..auth import current_user
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -23,12 +24,21 @@ SessionDep = Annotated[Session, Depends(get_session)]
 # Resource Vault sample domain — replace it with wiring for your own services.
 
 
-def get_project_service(session: SessionDep) -> ProjectService:
-    return ProjectService(SqlProjectRepository(session))
+def tenant_id(request: Request) -> str:
+    user = current_user(request)
+    return user.id if user is not None else "__local__"
 
 
-def get_note_service(session: SessionDep) -> NoteService:
-    return NoteService(SqlNoteRepository(session), SqlProjectRepository(session))
+def get_project_service(session: SessionDep, request: Request) -> ProjectService:
+    owner_id = tenant_id(request)
+    return ProjectService(SqlProjectRepository(session, owner_id), owner_id)
+
+
+def get_note_service(session: SessionDep, request: Request) -> NoteService:
+    owner_id = tenant_id(request)
+    return NoteService(
+        SqlNoteRepository(session, owner_id), SqlProjectRepository(session, owner_id)
+    )
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]

@@ -1,0 +1,107 @@
+{% if include_ai_saas %}
+from __future__ import annotations
+
+import base64
+
+import httpx
+
+from {{ pkg_slug }}_ai_runtime import (
+    AIProvider,
+    GenerationRequest,
+    ProviderResult,
+    ProviderResultStatus,
+)
+
+from ..settings import settings
+
+_MOCK_PNG = base64.b64encode(
+    base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+).decode()
+
+
+class MockAIProvider:
+    name = "mock"
+
+    def submit(self, request: GenerationRequest) -> ProviderResult:
+        return ProviderResult(
+            status=ProviderResultStatus.SUCCEEDED,
+            request_id=f"mock-{request.job_id}",
+            output_url=request.input_url or f"data:image/png;base64,{_MOCK_PNG}",
+        )
+
+    def poll(self, request_id: str) -> ProviderResult:
+        return ProviderResult(
+            status=ProviderResultStatus.FAILED,
+            request_id=request_id,
+            error="Mock jobs complete during submission and cannot be polled.",
+        )
+
+
+class HttpAIProvider:
+    """Small provider contract suitable for MuAPI/fal/Replicate gateway adapters.
+
+    POST ``APP_AI_PROVIDER_URL`` receives the GenerationRequest fields and must
+    return ``{request_id, status, output_url?, error?}``. GET
+    ``<url>/<request_id>`` uses the same response shape. Long-running providers
+    should call the signed OPK callback supplied as ``callback_url``.
+    """
+
+    name = "http"
+
+    def __init__(self, base_url: str, api_key: str = "") -> None:
+        self._base_url = base_url.rstrip("/")
+        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+    @staticmethod
+    def _result(payload: dict) -> ProviderResult:
+        raw = str(payload.get("status", "pending")).lower()
+        aliases = {"completed": "succeeded", "success": "succeeded", "error": "failed"}
+        raw = aliases.get(raw, raw)
+        try:
+            status = ProviderResultStatus(raw)
+        except ValueError:
+            status = ProviderResultStatus.PENDING
+        return ProviderResult(
+            status=status,
+            request_id=str(payload.get("request_id") or payload.get("id") or ""),
+            output_url=payload.get("output_url") or payload.get("output"),
+            error=payload.get("error"),
+        )
+
+    def submit(self, request: GenerationRequest) -> ProviderResult:
+        if not self._base_url:
+            raise RuntimeError("APP_AI_PROVIDER_URL is required for the http provider")
+        response = httpx.post(
+            self._base_url,
+            headers=self._headers,
+            json={
+                "job_id": request.job_id,
+                "prompt": request.prompt,
+                "model": request.model,
+                "input_url": request.input_url,
+                "callback_url": request.callback_url,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return self._result(response.json())
+
+    def poll(self, request_id: str) -> ProviderResult:
+        response = httpx.get(
+            f"{self._base_url}/{request_id}", headers=self._headers, timeout=15
+        )
+        response.raise_for_status()
+        return self._result(response.json())
+
+
+def configured_provider() -> AIProvider:
+    if settings.ai_provider == "mock":
+        return MockAIProvider()
+    if settings.ai_provider == "http":
+        return HttpAIProvider(settings.ai_provider_url, settings.ai_api_key)
+    raise RuntimeError(f"Unknown APP_AI_PROVIDER: {settings.ai_provider}")
+{% else %}
+"""AI provider adapters are generated when include_ai_saas=true."""
+{% endif %}

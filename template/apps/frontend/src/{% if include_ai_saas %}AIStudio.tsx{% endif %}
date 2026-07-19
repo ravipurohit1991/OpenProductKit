@@ -1,0 +1,174 @@
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+
+import { client, getAuthToken } from "./client/client";
+import type { components } from "./client/schema";
+
+type Generation = components["schemas"]["GenerationOut"];
+type Asset = components["schemas"]["AssetOut"];
+type AIConfig = components["schemas"]["AIConfigOut"];
+
+function apiError(error: unknown): Error {
+  return new Error(typeof error === "string" ? error : JSON.stringify(error));
+}
+
+function responseError(result: unknown): unknown | undefined {
+  if (result && typeof result === "object" && "error" in result) {
+    return (result as { error?: unknown }).error;
+  }
+  return undefined;
+}
+
+async function upload(file: File): Promise<Asset> {
+  const headers = new Headers();
+  const token = getAuthToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch("/api/ai/uploads", { method: "POST", body, headers });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
+  }
+  return response.json() as Promise<Asset>;
+}
+
+const card = { border: "1px solid #ddd", borderRadius: 10, padding: "1rem", background: "#fff" } as const;
+
+export function AIStudio() {
+  const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState("default");
+  const [file, setFile] = useState<File | null>(null);
+  const [credits, setCredits] = useState(0);
+  const [config, setConfig] = useState<AIConfig | null>(null);
+  const [jobs, setJobs] = useState<Generation[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [creditsResult, jobsResult, configResult] = await Promise.all([
+      client.GET("/api/ai/credits"),
+      client.GET("/api/ai/generations"),
+      client.GET("/api/ai/config"),
+    ]);
+    const error = responseError(creditsResult) ?? responseError(jobsResult) ?? responseError(configResult);
+    if (error) throw apiError(error);
+    if (!creditsResult.data || !jobsResult.data || !configResult.data) {
+      throw new Error("The AI API returned an empty response");
+    }
+    setCredits(creditsResult.data.balance);
+    setJobs(jobsResult.data);
+    setConfig(configResult.data);
+    setModel((current) => current === "default" ? configResult.data.default_model : current);
+  }, []);
+
+  useEffect(() => {
+    refresh().catch((reason) => setError(String(reason)));
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!jobs.some((job) => job.status === "queued" || job.status === "running")) return;
+    const timer = window.setInterval(() => refresh().catch(() => undefined), 2000);
+    return () => window.clearInterval(timer);
+  }, [jobs, refresh]);
+
+  async function generate(event: FormEvent) {
+    event.preventDefault();
+    if (!prompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      let inputAssetId: string | null = null;
+      if (file) {
+        inputAssetId = (await upload(file)).id;
+      }
+      const result = await client.POST("/api/ai/generations", {
+        params: { header: { "Idempotency-Key": crypto.randomUUID() } },
+        body: { prompt: prompt.trim(), model, input_asset_id: inputAssetId },
+      });
+      if (result.error) throw apiError(result.error);
+      setPrompt("");
+      setFile(null);
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function buyCredits() {
+    setError(null);
+    try {
+      const pack = config?.credit_packs[0];
+      if (!pack) throw new Error("Stripe credit packs are not configured");
+      const result = await client.POST("/api/ai/billing/checkout", {
+        params: { header: { "Idempotency-Key": crypto.randomUUID() } },
+        body: { pack_id: pack.id },
+      });
+      if (result.error) throw apiError(result.error);
+      window.location.assign(result.data.url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  return (
+    <section>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+        <div>
+          <h2 style={{ marginBottom: 4 }}>AI Studio</h2>
+          <p style={{ marginTop: 0, color: "#666" }}>Durable generation jobs with atomic credit reservation and refunds.</p>
+        </div>
+        <div style={{ ...card, padding: "0.6rem 0.9rem", whiteSpace: "nowrap" }}>
+          <strong>{credits}</strong> credits{" "}
+          {config?.credit_packs.length ? <button onClick={buyCredits} style={{ marginLeft: 8 }}>Buy more</button> : null}
+        </div>
+      </div>
+
+      {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
+
+      <form onSubmit={generate} style={{ ...card, display: "grid", gap: 10, marginBottom: 20 }}>
+        <label>
+          <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>Prompt</span>
+          <textarea
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            rows={4}
+            maxLength={4000}
+            placeholder="Describe what you want to generate…"
+            style={{ width: "100%", boxSizing: "border-box", padding: "0.7rem" }}
+          />
+        </label>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) minmax(220px, 2fr)", gap: 12 }}>
+          <label>
+            <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>Model</span>
+            <input value={model} onChange={(event) => setModel(event.target.value)} style={{ width: "100%", padding: "0.55rem", boxSizing: "border-box" }} />
+          </label>
+          <label>
+            <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>Reference image (optional)</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+        <button type="submit" disabled={busy || !prompt.trim() || credits < (config?.generation_cost ?? 1)} style={{ padding: "0.65rem 1rem" }}>
+          {busy ? "Submitting…" : `Generate · ${config?.generation_cost ?? 1} credit${(config?.generation_cost ?? 1) === 1 ? "" : "s"}`}
+        </button>
+      </form>
+
+      <h3>Generation history</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+        {jobs.map((job) => (
+          <article key={job.id} style={card}>
+            {job.output_url && <img src={job.output_url} alt={job.prompt} style={{ width: "100%", height: 180, objectFit: "cover", borderRadius: 6, background: "#f3f3f3" }} />}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+              <strong>{job.status}</strong>
+              <small>{job.model} · {job.cost_credits} credit</small>
+            </div>
+            <p style={{ marginBottom: 4 }}>{job.prompt}</p>
+            {job.error && <small style={{ color: "crimson" }}>{job.error}</small>}
+          </article>
+        ))}
+        {jobs.length === 0 && <p style={{ color: "#777" }}>No generations yet.</p>}
+      </div>
+    </section>
+  );
+}

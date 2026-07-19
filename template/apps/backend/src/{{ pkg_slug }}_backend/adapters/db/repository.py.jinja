@@ -19,31 +19,46 @@ from .models import NoteRow, NoteTagRow, ProjectRow
 
 
 class SqlProjectRepository(ProjectRepository):
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, owner_id: str = "__local__") -> None:
         self._session = session
+        self._owner_id = owner_id
 
     def add(self, project: Project) -> None:
         self._session.add(
-            ProjectRow(id=project.id, name=project.name, created_at=project.created_at)
+            ProjectRow(
+                id=project.id,
+                owner_id=project.owner_id,
+                name=project.name,
+                created_at=project.created_at,
+            )
         )
         self._session.commit()
 
     def list(self) -> list[Project]:
-        rows = self._session.exec(select(ProjectRow)).all()
+        rows = self._session.exec(
+            select(ProjectRow).where(ProjectRow.owner_id == self._owner_id)
+        ).all()
         return [self._to_domain(r) for r in rows]
 
     def get(self, project_id: str) -> Project | None:
-        row = self._session.get(ProjectRow, project_id)
+        row = self._session.exec(
+            select(ProjectRow).where(
+                ProjectRow.id == project_id, ProjectRow.owner_id == self._owner_id
+            )
+        ).first()
         return self._to_domain(row) if row is not None else None
 
     @staticmethod
     def _to_domain(row: ProjectRow) -> Project:
-        return Project(id=row.id, name=row.name, created_at=row.created_at)
+        return Project(
+            id=row.id, owner_id=row.owner_id, name=row.name, created_at=row.created_at
+        )
 
 
 class SqlNoteRepository(NoteRepository):
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, owner_id: str = "__local__") -> None:
         self._session = session
+        self._owner_id = owner_id
 
     def add(self, note: Note) -> None:
         self._session.add(
@@ -60,11 +75,19 @@ class SqlNoteRepository(NoteRepository):
         self._session.commit()
 
     def get(self, note_id: str) -> Note | None:
-        row = self._session.get(NoteRow, note_id)
+        row = self._session.exec(
+            select(NoteRow)
+            .join(ProjectRow, ProjectRow.id == NoteRow.project_id)
+            .where(NoteRow.id == note_id, ProjectRow.owner_id == self._owner_id)
+        ).first()
         return self._to_domain(row) if row is not None else None
 
     def list(self, *, project_id=None, tag=None, query=None) -> list[Note]:
-        stmt = select(NoteRow)
+        stmt = (
+            select(NoteRow)
+            .join(ProjectRow, ProjectRow.id == NoteRow.project_id)
+            .where(ProjectRow.owner_id == self._owner_id)
+        )
         if project_id is not None:
             stmt = stmt.where(NoteRow.project_id == project_id)
         if tag is not None:

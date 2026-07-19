@@ -10,6 +10,9 @@ Generated from [OpenProductKit](https://github.com/ravipurohit1991/OpenProductKi
 packages/core        Pure Python domain models + Repository ports. No FastAPI, no DB, no HTTP.
 packages/plugin-api  Extension SDK: the Plugin contract + registry. No runtime deps.
 packages/licensing   Entitlement: dev stub, Ed25519 signed offline tokens, file/HTTP providers.
+{%- if include_ai_saas %}
+packages/ai-runtime  Provider-neutral generation jobs, results and transition rules.
+{%- endif %}
 apps/backend         FastAPI adapter. Owns SQLModel persistence (implements core ports).
 apps/cli             Typer CLI + task runner ({{ cli_name }}).
 apps/frontend        React + Vite web UI. Talks to the backend over HTTP - or the desktop bridge.
@@ -118,6 +121,31 @@ admin-only. Desktop/local runs stay accountless.
 uv run {{ cli_name }} user add you@example.com --admin
 uv run {{ cli_name }} user list
 ```
+
+{%- if include_ai_saas %}
+## AI SaaS runtime
+
+This project includes the optional AI product profile: the **AI Studio** UI,
+tenant-owned generation jobs and assets, an atomic credit/refund ledger,
+provider callbacks, Stripe credit packs and a durable worker. The credential-free
+mock provider makes the full flow runnable immediately.
+
+```bash
+uv run {{ cli_name }} dev       # terminal 1: API
+pnpm -C apps/frontend dev       # terminal 2: Studio UI
+uv run {{ cli_name }} worker    # hosted mode when APP_AI_INLINE_JOBS=false
+```
+
+For an external gateway set `APP_AI_PROVIDER=http`,
+`APP_AI_PROVIDER_URL`, `APP_AI_API_KEY`, and an
+`APP_AI_WEBHOOK_SECRET`. The gateway receives `prompt`, `model`, optional
+`input_url`, and `callback_url`; see `.env.example` for every provider, S3,
+asset signing and Stripe setting.
+
+Hosted checkout requires `APP_AUTH_ENABLED=true`, Stripe secret/webhook keys,
+and `APP_STRIPE_CREDIT_PACKS`. Local mode starts each tenant with the configured
+trial credits and stores uploads below `data/uploads`.
+{%- endif %}
 
 ## Develop
 

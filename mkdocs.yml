@@ -47,6 +47,7 @@ nav:
       - Licensing: licensing.md
       - Marketplace: marketplace.md
       - Auth & users: auth.md
+      - AI SaaS profile: ai-saas.md
       - Deployment: deployment.md
       - Deploy recipes: deploy-recipes.md
       - Payments: payments.md

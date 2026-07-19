@@ -1,0 +1,475 @@
+{% if include_ai_saas %}
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Annotated
+from uuid import uuid4
+
+import stripe
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, RedirectResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import func
+from sqlmodel import select
+
+from ... import ai_runtime
+from ...adapters.asset_store import LocalAssetStore, configured_asset_store
+from ...adapters.db.models import AssetRow, GenerationJobRow
+from ...auth import current_user
+from ...settings import settings
+from ..deps import SessionDep, tenant_id
+
+router = APIRouter(prefix="/api/ai", tags=["ai-saas"])
+
+
+class AssetOut(BaseModel):
+    id: str
+    name: str
+    content_type: str
+    size_bytes: int
+    url: str
+
+
+class GenerationIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    model: str | None = Field(default=None, max_length=200)
+    input_asset_id: str | None = None
+
+
+class GenerationOut(BaseModel):
+    id: str
+    prompt: str
+    model: str
+    provider: str
+    status: str
+    cost_credits: int
+    input_asset_id: str | None
+    output_url: str | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LedgerOut(BaseModel):
+    id: str
+    amount: int
+    kind: str
+    reference_id: str | None
+    created_at: datetime
+
+
+class CreditOut(BaseModel):
+    balance: int
+    history: list[LedgerOut]
+
+
+class CreditPackOut(BaseModel):
+    id: str
+    credits: int
+
+
+class AIConfigOut(BaseModel):
+    provider: str
+    default_model: str
+    generation_cost: int
+    max_upload_bytes: int
+    allowed_content_types: list[str]
+    credit_packs: list[CreditPackOut]
+
+
+class AIHealthOut(BaseModel):
+    provider: str
+    storage: str
+    queued: int
+    running: int
+    failed: int
+    stripe_configured: bool
+
+
+class CheckoutIn(BaseModel):
+    pack_id: str = Field(min_length=1, max_length=100)
+
+
+class CheckoutOut(BaseModel):
+    url: str
+
+
+def _generation(row: GenerationJobRow) -> GenerationOut:
+    return GenerationOut.model_validate(row, from_attributes=True)
+
+
+def _owned_job(session: SessionDep, owner_id: str, job_id: str) -> GenerationJobRow:
+    job = session.exec(
+        select(GenerationJobRow).where(
+            GenerationJobRow.id == job_id, GenerationJobRow.owner_id == owner_id
+        )
+    ).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    return job
+
+
+@router.get("/credits", response_model=CreditOut)
+def credits(request: Request, session: SessionDep) -> CreditOut:
+    owner_id = tenant_id(request)
+    history = ai_runtime.credit_history(session, owner_id)[:50]
+    return CreditOut(
+        balance=ai_runtime.credit_balance(session, owner_id),
+        history=[LedgerOut.model_validate(row, from_attributes=True) for row in history],
+    )
+
+
+@router.get("/config", response_model=AIConfigOut)
+def ai_config() -> AIConfigOut:
+    packs = []
+    for pack_id, value in _credit_packs().items():
+        if isinstance(value, dict) and int(value.get("credits", 0)) > 0:
+            packs.append(CreditPackOut(id=pack_id, credits=int(value["credits"])))
+    return AIConfigOut(
+        provider=settings.ai_provider,
+        default_model=settings.ai_default_model,
+        generation_cost=settings.ai_generation_cost,
+        max_upload_bytes=settings.ai_max_upload_bytes,
+        allowed_content_types=[
+            item.strip()
+            for item in settings.ai_allowed_content_types.split(",")
+            if item.strip()
+        ],
+        credit_packs=packs if settings.stripe_secret_key else [],
+    )
+
+
+@router.get("/health", response_model=AIHealthOut)
+def ai_health(request: Request, session: SessionDep) -> AIHealthOut:
+    owner_id = tenant_id(request)
+
+    def count(status: str) -> int:
+        return session.exec(
+            select(func.count())
+            .select_from(GenerationJobRow)
+            .where(
+                GenerationJobRow.owner_id == owner_id,
+                GenerationJobRow.status == status,
+            )
+        ).one()
+
+    return AIHealthOut(
+        provider=settings.ai_provider,
+        storage=settings.ai_storage_backend,
+        queued=count("queued"),
+        running=count("running"),
+        failed=count("failed"),
+        stripe_configured=bool(
+            settings.stripe_secret_key and settings.stripe_webhook_secret
+        ),
+    )
+
+
+@router.get("/generations", response_model=list[GenerationOut])
+def list_generations(request: Request, session: SessionDep) -> list[GenerationOut]:
+    owner_id = tenant_id(request)
+    rows = session.exec(
+        select(GenerationJobRow)
+        .where(GenerationJobRow.owner_id == owner_id)
+        .order_by(GenerationJobRow.created_at.desc())
+    ).all()
+    return [_generation(row) for row in rows]
+
+
+@router.post("/generations", response_model=GenerationOut, status_code=202)
+def create_generation(
+    payload: GenerationIn,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: SessionDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> GenerationOut:
+    owner_id = tenant_id(request)
+    try:
+        job = ai_runtime.reserve_generation(
+            session,
+            owner_id=owner_id,
+            prompt=payload.prompt,
+            model=payload.model or settings.ai_default_model,
+            input_asset_id=payload.input_asset_id,
+            idempotency_key=idempotency_key or uuid4().hex,
+        )
+    except ai_runtime.InsufficientCreditsError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if settings.ai_inline_jobs and job.status == "queued":
+        background_tasks.add_task(ai_runtime.process_job_by_id, job.id)
+    return _generation(job)
+
+
+@router.get("/generations/{job_id}", response_model=GenerationOut)
+def get_generation(job_id: str, request: Request, session: SessionDep) -> GenerationOut:
+    return _generation(_owned_job(session, tenant_id(request), job_id))
+
+
+@router.post("/generations/{job_id}/cancel", response_model=GenerationOut)
+def cancel_generation(job_id: str, request: Request, session: SessionDep) -> GenerationOut:
+    job = _owned_job(session, tenant_id(request), job_id)
+    ai_runtime.cancel_job(session, job)
+    session.refresh(job)
+    return _generation(job)
+
+
+@router.post("/generations/{job_id}/sync", response_model=GenerationOut)
+def sync_generation(job_id: str, request: Request, session: SessionDep) -> GenerationOut:
+    job = _owned_job(session, tenant_id(request), job_id)
+    return _generation(ai_runtime.reconcile_job(session, job))
+
+
+@router.post("/uploads", response_model=AssetOut, status_code=201)
+async def upload_asset(
+    request: Request,
+    session: SessionDep,
+    file: Annotated[UploadFile, File()],
+) -> AssetOut:
+    content_type = (file.content_type or "application/octet-stream").lower()
+    allowed = {
+        value.strip().lower()
+        for value in settings.ai_allowed_content_types.split(",")
+        if value.strip()
+    }
+    if content_type not in allowed:
+        raise HTTPException(status_code=415, detail="Unsupported media type")
+    content = await file.read(settings.ai_max_upload_bytes + 1)
+    if len(content) > settings.ai_max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Upload exceeds the configured size limit")
+    if not content:
+        raise HTTPException(status_code=422, detail="Upload is empty")
+    signatures = {
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "image/webp": content.startswith(b"RIFF") and content[8:12] == b"WEBP",
+    }
+    if not signatures.get(content_type, False):
+        raise HTTPException(status_code=422, detail="File content does not match its media type")
+
+    owner_id = tenant_id(request)
+    asset_id = uuid4().hex
+    suffixes = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+    suffix = suffixes.get(content_type, ".bin")
+    storage_key = f"{owner_id}/{asset_id}{suffix}"
+    try:
+        configured_asset_store().put(storage_key, content, content_type)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Asset storage failed: {exc}") from exc
+
+    row = AssetRow(
+        id=asset_id,
+        owner_id=owner_id,
+        name=Path(file.filename or "upload").name,
+        content_type=content_type,
+        size_bytes=len(content),
+        storage_key=storage_key,
+        created_at=ai_runtime.utcnow(),
+    )
+    session.add(row)
+    session.commit()
+    return AssetOut(
+        id=row.id,
+        name=row.name,
+        content_type=row.content_type,
+        size_bytes=row.size_bytes,
+        url=f"/api/ai/assets/{row.id}",
+    )
+
+
+@router.get("/assets/{asset_id}", response_model=None)
+def get_asset(
+    asset_id: str,
+    request: Request,
+    session: SessionDep,
+    expires: int | None = None,
+    signature: str | None = None,
+) -> Response:
+    row = session.get(AssetRow, asset_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    user = current_user(request)
+    if settings.auth_enabled and (user is None or user.id != row.owner_id):
+        secret = settings.ai_asset_signing_secret or settings.ai_webhook_secret
+        valid = False
+        if secret and expires is not None and expires >= int(time.time()) and signature:
+            expected = hmac.new(
+                secret.encode(), f"{asset_id}:{expires}".encode(), hashlib.sha256
+            ).hexdigest()
+            valid = hmac.compare_digest(signature, expected)
+        if not valid:
+            raise HTTPException(status_code=404, detail="Asset not found")
+    elif not settings.auth_enabled and row.owner_id != "__local__":
+        raise HTTPException(status_code=404, detail="Asset not found")
+    try:
+        store = configured_asset_store()
+        if isinstance(store, LocalAssetStore):
+            path = store.path(row.storage_key)
+            if not path.is_file():
+                raise HTTPException(status_code=404, detail="Asset data not found")
+            return FileResponse(path, media_type=row.content_type, filename=row.name)
+        return RedirectResponse(store.signed_url(row.storage_key), status_code=307)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Asset retrieval failed: {exc}") from exc
+
+
+def _verify_provider_signature(body: bytes, signature: str | None) -> None:
+    if not settings.ai_webhook_secret:
+        raise HTTPException(status_code=503, detail="AI webhook secret is not configured")
+    supplied = (signature or "").removeprefix("sha256=")
+    expected = hmac.new(
+        settings.ai_webhook_secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+
+async def _limited_webhook_body(request: Request, limit: int = 1024 * 1024) -> bytes:
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > limit:
+        raise HTTPException(status_code=413, detail="Webhook payload is too large")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > limit:
+            raise HTTPException(status_code=413, detail="Webhook payload is too large")
+    return bytes(body)
+
+
+@router.post("/webhooks/provider/{provider}")
+async def provider_webhook(
+    provider: str,
+    request: Request,
+    session: SessionDep,
+    x_opk_signature: str | None = Header(default=None, alias="X-OPK-Signature"),
+) -> dict[str, str]:
+    body = await _limited_webhook_body(request)
+    _verify_provider_signature(body, x_opk_signature)
+    try:
+        payload = json.loads(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON") from exc
+    event_id = str(payload.get("event_id") or payload.get("id") or "")
+    request_id = str(payload.get("request_id") or "")
+    status = str(payload.get("status") or "").lower()
+    if not event_id or not request_id:
+        raise HTTPException(status_code=400, detail="Missing event_id or request_id")
+    if not ai_runtime.record_webhook(session, event_id, provider, status):
+        return {"status": "duplicate"}
+    job = session.exec(
+        select(GenerationJobRow).where(
+            GenerationJobRow.provider_request_id == request_id,
+            GenerationJobRow.provider == provider,
+        )
+    ).first()
+    if job is None:
+        session.rollback()
+        raise HTTPException(status_code=404, detail="Generation not found")
+    if status in {"succeeded", "completed"} and payload.get("output_url"):
+        ai_runtime.succeed_job(session, job, str(payload["output_url"]))
+    elif status in {"failed", "error"}:
+        ai_runtime.fail_job(session, job, str(payload.get("error") or "Provider failed"))
+    else:
+        session.commit()
+    return {"status": "accepted"}
+
+
+def _credit_packs() -> dict[str, dict]:
+    try:
+        raw = json.loads(settings.stripe_credit_packs)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500, detail="Invalid Stripe credit pack configuration"
+        ) from exc
+    return raw if isinstance(raw, dict) else {}
+
+
+@router.post("/billing/checkout", response_model=CheckoutOut)
+def create_checkout(
+    payload: CheckoutIn,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> CheckoutOut:
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(status_code=400, detail="Hosted auth is required for checkout")
+    if not settings.stripe_secret_key:
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
+    pack = _credit_packs().get(payload.pack_id)
+    if not isinstance(pack, dict) or not pack.get("price_id") or int(pack.get("credits", 0)) < 1:
+        raise HTTPException(status_code=404, detail="Unknown credit pack")
+    try:
+        checkout = stripe.checkout.Session.create(
+            api_key=settings.stripe_secret_key,
+            idempotency_key=idempotency_key or uuid4().hex,
+            mode="payment",
+            line_items=[{"price": str(pack["price_id"]), "quantity": 1}],
+            success_url=settings.stripe_success_url,
+            cancel_url=settings.stripe_cancel_url,
+            customer_email=user.email,
+            client_reference_id=user.id,
+            metadata={
+                "owner_id": user.id,
+                "credits": str(int(pack["credits"])),
+                "pack_id": payload.pack_id,
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Stripe checkout failed: {exc}") from exc
+    return CheckoutOut(url=str(checkout.url))
+
+
+@router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request, session: SessionDep) -> dict[str, str]:
+    if not settings.stripe_webhook_secret:
+        raise HTTPException(status_code=503, detail="Stripe webhook secret is not configured")
+    body = await _limited_webhook_body(request)
+    signature = request.headers.get("stripe-signature", "")
+    try:
+        stripe.Webhook.construct_event(
+            body, signature, settings.stripe_webhook_secret
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature") from exc
+    event = json.loads(body)
+    event_id = str(event["id"])
+    event_type = str(event["type"])
+    if not ai_runtime.record_webhook(session, event_id, "stripe", event_type):
+        return {"status": "duplicate"}
+    if event_type != "checkout.session.completed":
+        session.commit()
+        return {"status": "ignored"}
+    checkout = event["data"]["object"]
+    metadata = checkout.get("metadata") or {}
+    owner_id = str(metadata.get("owner_id") or checkout.get("client_reference_id") or "")
+    credits = int(metadata.get("credits") or 0)
+    if checkout.get("payment_status") != "paid" or not owner_id or credits < 1:
+        session.rollback()
+        raise HTTPException(status_code=400, detail="Invalid completed checkout metadata")
+    ai_runtime.grant_credits(
+        session,
+        owner_id,
+        credits,
+        idempotency_key=f"stripe:{checkout['id']}",
+        reference_id=str(checkout["id"]),
+    )
+    return {"status": "credited"}
+{% else %}
+"""AI SaaS routes are generated when include_ai_saas=true."""
+{% endif %}

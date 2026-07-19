@@ -31,6 +31,7 @@ from .settings import settings
 
 # Endpoints that must work without a session, or logging in would be impossible.
 PUBLIC_PATHS = {"/api/health", "/api/auth/me", "/api/auth/login", "/api/auth/setup"}
+PUBLIC_PREFIXES = ("/api/ai/assets/", "/api/ai/webhooks/")
 
 _SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2**14, 8, 1
 
@@ -148,8 +149,11 @@ def enforce_auth(request: Request) -> None:
     reachable — they expose the schema and the login screen, never data.
     """
     request.state.user = None
-    if not settings.auth_enabled or request.url.path in PUBLIC_PATHS:
+    if not settings.auth_enabled:
         return
+    public = request.url.path in PUBLIC_PATHS or request.url.path.startswith(
+        PUBLIC_PREFIXES
+    )
     token = _bearer_token(request)
     if token:
         with Session(engine) as session:
@@ -157,6 +161,8 @@ def enforce_auth(request: Request) -> None:
         if user is not None:
             request.state.user = user
             return
+    if public:
+        return
     raise HTTPException(status_code=401, detail={"error": "auth_required"})
 
 

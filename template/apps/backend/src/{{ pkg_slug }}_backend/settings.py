@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,41 @@ class Settings(BaseSettings):
     auth_enabled: bool = False
     # How long a login session stays valid.
     auth_session_days: int = 30
+
+    # --- AI SaaS profile --------------------------------------------------------
+    # These settings are inert unless the project was generated with
+    # include_ai_saas=true. The mock provider makes the complete flow runnable
+    # without credentials; "http" delegates to an asynchronous provider API.
+    ai_provider: str = "mock"
+    ai_provider_url: str = ""
+    ai_api_key: str = ""
+    ai_webhook_secret: str = ""
+    ai_default_model: str = "default"
+    ai_generation_cost: int = Field(default=1, ge=1)
+    ai_trial_credits: int = Field(default=10, ge=0)
+    ai_inline_jobs: bool = True
+    ai_job_lease_seconds: int = Field(default=300, ge=30)
+    ai_public_url: str = "http://127.0.0.1:8000"
+    ai_upload_dir: str = "data/uploads"
+    ai_max_upload_bytes: int = Field(default=10 * 1024 * 1024, ge=1)
+    ai_allowed_content_types: str = "image/png,image/jpeg,image/webp"
+    ai_asset_signing_secret: str = ""
+    ai_asset_url_seconds: int = Field(default=900, ge=30)
+    ai_storage_backend: str = "local"
+    ai_s3_bucket: str = ""
+    ai_s3_region: str = ""
+    ai_s3_endpoint_url: str = ""
+    ai_s3_access_key_id: str = ""
+    ai_s3_secret_access_key: str = ""
+    ai_s3_presign_seconds: int = Field(default=900, ge=30)
+
+    # Stripe credit packs. JSON object: {"starter": {"price_id": "price_...",
+    # "credits": 100}}. Checkout stays disabled until all Stripe values exist.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_credit_packs: str = "{}"
+    stripe_success_url: str = "http://127.0.0.1:5173/?checkout=success"
+    stripe_cancel_url: str = "http://127.0.0.1:5173/?checkout=cancelled"
 
     # --- marketplace (see api/routes/marketplace) ------------------------------
     # Local catalog of available extensions shown in the Marketplace tab.

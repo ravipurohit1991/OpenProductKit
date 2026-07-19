@@ -7,6 +7,13 @@ dependencies = [
     "{{ pkg_slug }}-core",
     "{{ pkg_slug }}-plugin-api",
     "{{ pkg_slug }}-licensing",
+{%- if include_ai_saas %}
+    "{{ pkg_slug }}-ai-runtime",
+    "boto3>=1.35",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+    "stripe>=15,<16",
+{%- endif %}
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "sqlmodel>=0.0.22",
@@ -25,6 +32,9 @@ dependencies = [
 "{{ pkg_slug }}-core" = { workspace = true }
 "{{ pkg_slug }}-plugin-api" = { workspace = true }
 "{{ pkg_slug }}-licensing" = { workspace = true }
+{%- if include_ai_saas %}
+"{{ pkg_slug }}-ai-runtime" = { workspace = true }
+{%- endif %}
 
 [build-system]
 requires = ["hatchling"]

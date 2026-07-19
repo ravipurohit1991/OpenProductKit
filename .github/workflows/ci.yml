@@ -98,6 +98,8 @@ jobs:
             answers: "-d desktop_framework=tauri"
           - name: postgres-nodesktop
             answers: "-d desktop_framework=none -d database=postgres"
+          - name: ai-saas
+            answers: "-d include_ai_saas=true -d desktop_framework=none"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,6 +109,16 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
+
+      - uses: pnpm/action-setup@v4
+        if: matrix.name == 'ai-saas'
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        if: matrix.name == 'ai-saas'
+        with:
+          node-version: 22
 
       - name: Generate a project from the template
         run: uvx copier copy --defaults --trust --vcs-ref HEAD ${{ matrix.answers }} . "${{ runner.temp }}/gen"
@@ -121,6 +133,15 @@ jobs:
       - name: Validate the compose file
         working-directory: ${{ runner.temp }}/gen
         run: docker compose config -q
+
+      - name: AI SaaS — typed client and frontend
+        if: matrix.name == 'ai-saas'
+        working-directory: ${{ runner.temp }}/gen
+        run: |
+          pnpm install
+          uv run opk gen --check
+          pnpm -C apps/frontend typecheck
+          pnpm -C apps/frontend build
 
       - name: Sidecar smoke test (headless)
         if: matrix.name == 'electron' || matrix.name == 'tauri'

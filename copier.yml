@@ -90,6 +90,11 @@ database:
     "SQLite — zero-config single file (recommended to start; you can switch later)": sqlite
     "PostgreSQL — runs as a service in the Docker stack": postgres
 
+include_ai_saas:
+  type: bool
+  help: Include the production AI SaaS profile (generation jobs, credits, uploads, provider adapters and Stripe checkout)?
+  default: false
+
 include_docker:
   type: bool
   help: Ship a Docker stack (backend + nginx web server{% if database == 'postgres' %} + postgres{% endif %}) with one-command launch?

@@ -39,12 +39,19 @@
 - [x] **Generated-client drift gate** — `opk gen --check` in both the generated project's CI and this repo's CI. Unblocked by pinning `openapi-typescript` exactly — the format-drift concern was real, so the pin is the fix, not hope.
 - [x] **Deploy recipes** — [copy-paste starts](deploy-recipes.md) for Fly.io, Railway, Cloud Run (+ optional Firebase Hosting front), static hosts with `/api` proxying, VPS + Caddy, and named Cloudflare tunnels — recipes in docs, zero new host lock-in in the template.
 
+## Milestone 6 — AI products (shipped)
+
+- [x] **Optional AI SaaS profile** — a Copier switch adds a provider-neutral runtime, mock/HTTP providers, durable queue worker, job reconciliation and a complete AI Studio. See [AI SaaS](ai-saas.md).
+- [x] **Metered credits and payments** — atomic tenant balances, immutable reserve/consume/refund ledger, idempotent client requests, Stripe Checkout credit packs and verified duplicate-safe webhooks.
+- [x] **Private assets** — validated uploads, tenant ownership, expiring provider URLs and local or S3-compatible storage.
+- [x] **Tenant isolation** — all project, note, generation, asset and credit access is scoped to the hosted user while local mode retains the `__local__` tenant.
+
 ## Next
 
 - **Plugin permissions & sandboxing** — enforce the manifest's declared `permissions` (today they are informational): restrict network/filesystem where feasible, and explore process isolation for untrusted extensions.
 - **Signed catalogs & pinned packages** — sign `catalog.json` with the vendor key and hash-pin `package` requirements, so a hosted catalog compromise cannot push arbitrary code to installs.
 - **SSO / OIDC** — enterprise login for the hosted story; `enforce_auth` is the seam it plugs into.
-- **Per-user data ownership recipe** — auth provides identity; a documented pattern (and demo) for scoping domain rows to users/teams turns it into multi-tenancy.
+- **Organizations and team tenancy** — user ownership now ships; the next layer is shared workspaces, roles and organization billing.
 - **Turnkey update check for pywebview** — promote the documented check-and-point snippet into a shipped, opt-in helper with UI.
 
 ## Explicitly out of scope for now

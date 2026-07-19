@@ -7,6 +7,9 @@ dependencies = [
     "{{ pkg_slug }}-core",
     "{{ pkg_slug }}-backend",
     "{{ pkg_slug }}-cli",
+{%- if include_ai_saas %}
+    "{{ pkg_slug }}-ai-runtime",
+{%- endif %}
 {%- if desktop_framework == 'pywebview' %}
     # Desktop shell — drop this line for server-only deployments.
     "{{ pkg_slug }}-desktop",
@@ -28,6 +31,9 @@ members = [
     "packages/*",
     "apps/backend",
     "apps/cli",
+{%- if include_ai_saas %}
+    "packages/ai-runtime",
+{%- endif %}
 {%- if desktop_framework == 'pywebview' %}
     "apps/desktop",
 {%- endif %}
@@ -43,6 +49,9 @@ members = [
 {%- endif %}
 "{{ pkg_slug }}-plugin-api" = { workspace = true }
 "{{ pkg_slug }}-licensing" = { workspace = true }
+{%- if include_ai_saas %}
+"{{ pkg_slug }}-ai-runtime" = { workspace = true }
+{%- endif %}
 "{{ pkg_slug }}-plugin-basic" = { workspace = true }
 "{{ pkg_slug }}-plugin-cli" = { workspace = true }
 "{{ pkg_slug }}-plugin-paid" = { workspace = true }
@@ -82,6 +91,9 @@ known-first-party = [
 {%- endif %}
     "{{ pkg_slug }}_plugin_api",
     "{{ pkg_slug }}_licensing",
+{%- if include_ai_saas %}
+    "{{ pkg_slug }}_ai_runtime",
+{%- endif %}
     "{{ pkg_slug }}_plugin_basic",
     "{{ pkg_slug }}_plugin_cli",
     "{{ pkg_slug }}_plugin_paid",
