@@ -9,11 +9,12 @@ from ..ports.repository import ProjectRepository
 
 
 class ProjectService:
-    def __init__(self, repo: ProjectRepository) -> None:
+    def __init__(self, repo: ProjectRepository, owner_id: str = "__local__") -> None:
         self._repo = repo
+        self._owner_id = owner_id
 
     def create(self, name: str) -> Project:
-        project = Project(name=name)
+        project = Project(name=name, owner_id=self._owner_id)
         self._repo.add(project)
         return project
 

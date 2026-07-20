@@ -13,6 +13,9 @@ Command groups:
   {{ cli_name }} stack …     the Docker stack: up / down / logs{% if include_tunnel %} / share{% endif %}
 {%- endif %}
 plus dev{% if desktop_framework != 'none' %} / desktop{% endif %} / doctor / info / test / lint / fmt / openapi / gen / version.
+{%- if include_ai_saas %}
+The `worker` command drains durable AI generation jobs in hosted deployments.
+{%- endif %}
 """
 
 from __future__ import annotations
@@ -21,7 +24,8 @@ from __future__ import annotations
 {% endif %}import shutil
 import subprocess
 import sys
-from pathlib import Path
+{% if include_ai_saas %}import time
+{% endif %}from pathlib import Path
 
 import typer
 from sqlmodel import Session
@@ -143,6 +147,26 @@ def dev(port: int = 8000, reload: bool = True) -> None:
         port=port,
         reload=reload,
     )
+
+
+{%- if include_ai_saas %}
+@app.command()
+def worker(
+    once: bool = typer.Option(False, "--once", help="Drain one batch and exit."),
+    interval: float = typer.Option(2.0, "--interval", min=0.1),
+) -> None:
+    """Process durable AI generation jobs."""
+    from {{ pkg_slug }}_backend.ai_runtime import process_queued
+
+    upgrade_head()
+    while True:
+        processed = process_queued()
+        if once:
+            typer.echo(f"Processed {processed} queued job(s).")
+            return
+        if processed == 0:
+            time.sleep(interval)
+{%- endif %}
 
 
 {%- if desktop_framework == 'pywebview' %}

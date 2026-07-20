@@ -20,7 +20,7 @@ OpenProductKit is a [Copier](https://copier.readthedocs.io) template that gives 
 
 The key idea is simple: **business logic lives in a framework-free core**. Web, CLI and desktop are delivery adapters around that core, not separate implementations of the product.
 
-**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
+**Docs:** [openproductkit docs](https://ravipurohit1991.github.io/OpenProductKit/) | [quickstart](docs/quickstart.md) | [architecture](docs/architecture.md) | [make it yours](docs/replace-the-demo.md) | [plugins](docs/plugins.md) | [marketplace](docs/marketplace.md) | [licensing](docs/licensing.md) | [payments](docs/payments.md) | [auth](docs/auth.md) | [AI SaaS](docs/ai-saas.md) | [deployment](docs/deployment.md) | [deploy recipes](docs/deploy-recipes.md) | [releases](docs/releases.md) | [roadmap](docs/roadmap.md)
 
 **Brand assets:** [banner](docs/assets/brand/openproductkit-banner.svg) | [wordmark](docs/assets/brand/openproductkit-logo.svg) | [favicon](docs/assets/brand/openproductkit-favicon.svg)
 
@@ -36,6 +36,7 @@ Most templates get you a web app or a desktop shell. OpenProductKit is meant for
 - **Plugin-ready:** Python entry-point plugins can add backend routes, CLI commands, settings, health checks and admin UI.
 - **A marketplace, not just plugins:** a catalog tab where users install extensions and unlock paid ones with a license token — live, no restart.
 - **Hosted-ready auth:** flip `APP_AUTH_ENABLED=true` and the same build grows accounts, sessions and admin gates; desktop/local stays accountless.
+- **Optional AI SaaS runtime:** generate a tenant-scoped Studio with durable provider jobs, uploads, atomic credits/refunds, Stripe packs, S3 storage and a worker.
 - **Payments are a recipe away:** documented Stripe / Lemon Squeezy / Paddle flows turn checkout into license tokens with ~100 lines.
 - **One-command deploy:** `stack up` runs nginx + backend (+ PostgreSQL) in Docker; `stack share` puts a public Cloudflare URL on your dev stack.
 - **Release CI included:** push a version tag and GitHub Actions builds desktop installers for all three OSes onto a GitHub Release.
@@ -92,6 +93,7 @@ If you changed `cli_name` during generation, replace `opk` with your generated c
 | Plugins | Entry-point plugin SDK with backend, CLI, settings, health and license support |
 | Marketplace | Catalog + unlock-with-token flow: users see, install and unlock paid extensions |
 | Auth | Optional user accounts (runtime switch), sessions, first-run admin setup, Users admin tab and CLI |
+| AI SaaS | Optional Studio, provider contract, durable jobs, tenant ownership, credit ledger, Stripe checkout, uploads/S3 and worker |
 | Deployment | `stack up` Docker stack (nginx + backend + optional PostgreSQL), `stack share` Cloudflare tunnel, host recipes |
 | Releases | Tag-triggered CI building per-OS desktop installers onto GitHub Releases |
 | Docs | MkDocs Material site with GitHub Pages and Read the Docs config |
@@ -103,6 +105,7 @@ If you changed `cli_name` during generation, replace `opk` with your generated c
 packages/core        Pure Python. Domain models + repository ports. No FastAPI, DB or HTTP.
 packages/plugin-api  Extension SDK: Plugin contract + entry-point registry.
 packages/licensing   Entitlement: dev stub, signed offline tokens, file/HTTP providers.
+packages/ai-runtime  Optional provider-neutral generation state and transitions.
 apps/backend         FastAPI adapter. Owns SQLModel persistence and Alembic migrations.
 apps/cli             Typer CLI and project control plane.
 apps/frontend        React + Vite UI over a generated OpenAPI client.
@@ -149,13 +152,13 @@ Shipped:
 - One-command Docker stack (nginx + backend + optional PostgreSQL) and `stack share` Cloudflare quick tunnel
 - Agent-ready rework path with `[demo]` markers and generated agent instructions
 - MkDocs Material docs site
+- Optional production-oriented AI SaaS profile with credits, Stripe, storage and durable jobs
 
 Next:
 
-- Payments hook recipe (checkout webhook → `license issue` → email token)
-- Runtime plugin installation from the UI, sandboxing and permissions
-- Frozen desktop plugin packaging, auto-update and release CI
-- Generated-client drift gate in CI
+- Plugin permissions, signed catalogs and pinned marketplace packages
+- SSO/OIDC and organization/team tenancy
+- Turnkey pywebview update checks
 
 See the [roadmap](docs/roadmap.md) for details.
 

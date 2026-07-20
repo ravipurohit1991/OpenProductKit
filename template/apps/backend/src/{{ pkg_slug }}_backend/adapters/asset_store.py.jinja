@@ -1,0 +1,64 @@
+{% if include_ai_saas %}
+from __future__ import annotations
+
+from pathlib import Path
+
+import boto3
+
+from ..settings import settings
+
+
+class LocalAssetStore:
+    def __init__(self, root: str) -> None:
+        self.root = Path(root).resolve()
+
+    def put(self, key: str, content: bytes, content_type: str) -> None:
+        target = self.path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
+    def path(self, key: str) -> Path:
+        target = (self.root / key).resolve()
+        if self.root not in target.parents:
+            raise ValueError("Asset key escapes the storage root")
+        return target
+
+
+class S3AssetStore:
+    def __init__(self) -> None:
+        if not settings.ai_s3_bucket:
+            raise RuntimeError("APP_AI_S3_BUCKET is required for S3 storage")
+        self.bucket = settings.ai_s3_bucket
+        self.client = boto3.client(
+            "s3",
+            region_name=settings.ai_s3_region or None,
+            endpoint_url=settings.ai_s3_endpoint_url or None,
+            aws_access_key_id=settings.ai_s3_access_key_id or None,
+            aws_secret_access_key=settings.ai_s3_secret_access_key or None,
+        )
+
+    def put(self, key: str, content: bytes, content_type: str) -> None:
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=content,
+            ContentType=content_type,
+        )
+
+    def signed_url(self, key: str) -> str:
+        return self.client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=settings.ai_s3_presign_seconds,
+        )
+
+
+def configured_asset_store() -> LocalAssetStore | S3AssetStore:
+    if settings.ai_storage_backend == "local":
+        return LocalAssetStore(settings.ai_upload_dir)
+    if settings.ai_storage_backend == "s3":
+        return S3AssetStore()
+    raise RuntimeError(f"Unknown APP_AI_STORAGE_BACKEND: {settings.ai_storage_backend}")
+{% else %}
+"""Asset storage adapters are generated when include_ai_saas=true."""
+{% endif %}

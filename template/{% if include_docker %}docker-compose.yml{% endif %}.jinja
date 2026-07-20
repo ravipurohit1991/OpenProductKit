@@ -8,6 +8,8 @@ name: {{ project_slug }}
 #   db       PostgreSQL 16 with a persistent volume{% endif %}{% if include_tunnel %}
 #   tunnel   optional Cloudflare quick tunnel: `{{ cli_name }} stack share`
 #            (profile "share") gives the stack a public trycloudflare.com URL{% endif %}
+{% if include_ai_saas %}#   worker   durable AI generation job processor
+{% endif %}
 
 services:
   backend:
@@ -28,7 +30,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-{%- else %}
+{%- endif %}
+{%- if database != 'postgres' or include_ai_saas %}
     volumes:
       - app-data:/app/data
 {%- endif %}
@@ -42,6 +45,32 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+{%- if include_ai_saas %}
+
+  worker:
+    image: {{ project_slug }}-backend
+    command: ["uv", "run", "{{ cli_name }}", "worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+{%- if database == 'postgres' %}
+      APP_DATABASE_URL: postgresql+psycopg://app:app@db:5432/app
+{%- else %}
+      APP_DATABASE_URL: sqlite:////app/data/app.db
+{%- endif %}
+      APP_AI_INLINE_JOBS: "false"
+    volumes:
+      - app-data:/app/data
+    depends_on:
+{%- if database == 'postgres' %}
+      db:
+        condition: service_healthy
+{%- else %}
+      backend:
+        condition: service_healthy
+{%- endif %}
+{%- endif %}
 
   web:
     build:
@@ -84,6 +113,7 @@ services:
 volumes:
 {%- if database == 'postgres' %}
   db-data:
-{%- else %}
+{%- endif %}
+{%- if database != 'postgres' or include_ai_saas %}
   app-data:
 {%- endif %}

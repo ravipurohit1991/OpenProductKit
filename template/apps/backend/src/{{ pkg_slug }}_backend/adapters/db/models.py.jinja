@@ -1,0 +1,141 @@
+"""SQLModel tables. This is persistence detail — it lives in the adapter, never
+in the core. The core's Project/Note are plain dataclasses; these are storage."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+{% if include_ai_saas %}from sqlalchemy import Column, Text
+{% endif -%}
+from sqlmodel import Field, SQLModel
+
+# [demo] ProjectRow/NoteRow/NoteTagRow are the Resource Vault sample tables —
+# replace them with your own. PluginStateRow below is framework: keep it.
+
+
+class ProjectRow(SQLModel, table=True):
+    __tablename__ = "projects"
+
+    id: str = Field(primary_key=True)
+    owner_id: str = Field(default="__local__", index=True)
+    name: str
+    created_at: datetime
+
+
+class NoteRow(SQLModel, table=True):
+    __tablename__ = "notes"
+
+    id: str = Field(primary_key=True)
+    project_id: str = Field(foreign_key="projects.id", index=True)
+    title: str
+    body: str = ""
+    created_at: datetime
+
+
+class NoteTagRow(SQLModel, table=True):
+    __tablename__ = "note_tags"
+
+    note_id: str = Field(foreign_key="notes.id", primary_key=True)
+    tag: str = Field(primary_key=True, index=True)
+
+
+class PluginStateRow(SQLModel, table=True):
+    """Persisted enable/disable state for a discovered plugin."""
+
+    __tablename__ = "plugin_states"
+
+    plugin_id: str = Field(primary_key=True)
+    enabled: bool = Field(default=True)
+
+
+class UserRow(SQLModel, table=True):
+    """A user account. Only consulted when APP_AUTH_ENABLED is on (hosted
+    deployments); the desktop/local story runs without accounts."""
+
+    __tablename__ = "users"
+
+    id: str = Field(primary_key=True)
+    email: str = Field(unique=True, index=True)
+    password_hash: str
+    is_admin: bool = Field(default=False)
+    created_at: datetime
+
+
+class AuthSessionRow(SQLModel, table=True):
+    """A bearer session. Only the SHA-256 of the token is stored, so a leaked
+    database does not leak usable tokens."""
+
+    __tablename__ = "auth_sessions"
+
+    token_hash: str = Field(primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    created_at: datetime
+    expires_at: datetime
+
+{% if include_ai_saas %}
+
+class CreditAccountRow(SQLModel, table=True):
+    """Materialized credit balance used for an atomic reserve operation."""
+
+    __tablename__ = "credit_accounts"
+
+    owner_id: str = Field(primary_key=True)
+    balance: int = Field(default=0)
+    updated_at: datetime
+
+
+class CreditLedgerRow(SQLModel, table=True):
+    """Immutable audit trail for grants, reservations, consumption and refunds."""
+
+    __tablename__ = "credit_ledger"
+
+    id: str = Field(primary_key=True)
+    owner_id: str = Field(index=True)
+    amount: int
+    kind: str = Field(index=True)
+    reference_id: str | None = Field(default=None, index=True)
+    idempotency_key: str = Field(unique=True, index=True)
+    created_at: datetime
+
+
+class GenerationJobRow(SQLModel, table=True):
+    __tablename__ = "generation_jobs"
+
+    id: str = Field(primary_key=True)
+    owner_id: str = Field(index=True)
+    prompt: str = Field(sa_column=Column(Text, nullable=False))
+    model: str
+    provider: str
+    status: str = Field(index=True)
+    cost_credits: int
+    input_asset_id: str | None = Field(default=None, index=True)
+    output_url: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    provider_request_id: str | None = Field(default=None, unique=True, index=True)
+    client_request_id: str = Field(unique=True, index=True)
+    error: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssetRow(SQLModel, table=True):
+    __tablename__ = "assets"
+
+    id: str = Field(primary_key=True)
+    owner_id: str = Field(index=True)
+    name: str
+    content_type: str
+    size_bytes: int
+    storage_key: str = Field(unique=True)
+    created_at: datetime
+
+
+class WebhookEventRow(SQLModel, table=True):
+    """Provider/Stripe event receipt used to make webhook handling idempotent."""
+
+    __tablename__ = "webhook_events"
+
+    id: str = Field(primary_key=True)
+    provider: str = Field(index=True)
+    event_type: str
+    received_at: datetime
+{% endif %}

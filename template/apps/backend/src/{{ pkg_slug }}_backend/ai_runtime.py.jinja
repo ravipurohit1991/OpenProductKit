@@ -1,0 +1,468 @@
+{% if include_ai_saas %}
+from __future__ import annotations
+
+import hashlib
+import hmac
+import logging
+from datetime import UTC, datetime, timedelta
+from time import time
+from uuid import uuid4
+
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
+
+from {{ pkg_slug }}_ai_runtime import (
+    GenerationJob,
+    GenerationRequest,
+    JobStatus,
+    ProviderResultStatus,
+)
+
+from .adapters.ai_provider import configured_provider
+from .adapters.db.engine import engine
+from .adapters.db.models import (
+    AssetRow,
+    CreditAccountRow,
+    CreditLedgerRow,
+    GenerationJobRow,
+    WebhookEventRow,
+)
+from .settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+class InsufficientCreditsError(ValueError):
+    pass
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def asset_access_url(asset_id: str) -> str:
+    base = f"{settings.ai_public_url.rstrip('/')}/api/ai/assets/{asset_id}"
+    if not settings.auth_enabled:
+        return base
+    secret = settings.ai_asset_signing_secret or settings.ai_webhook_secret
+    if not secret:
+        raise RuntimeError(
+            "APP_AI_ASSET_SIGNING_SECRET is required when hosted auth is enabled"
+        )
+    expires = int(time()) + settings.ai_asset_url_seconds
+    message = f"{asset_id}:{expires}".encode()
+    signature = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    return f"{base}?expires={expires}&signature={signature}"
+
+
+def _ledger(
+    owner_id: str,
+    amount: int,
+    kind: str,
+    idempotency_key: str,
+    reference_id: str | None = None,
+) -> CreditLedgerRow:
+    return CreditLedgerRow(
+        id=uuid4().hex,
+        owner_id=owner_id,
+        amount=amount,
+        kind=kind,
+        reference_id=reference_id,
+        idempotency_key=idempotency_key,
+        created_at=utcnow(),
+    )
+
+
+def ensure_credit_account(
+    session: Session, owner_id: str, *, commit: bool = True
+) -> CreditAccountRow:
+    account = session.get(CreditAccountRow, owner_id)
+    if account is not None:
+        return account
+    account = CreditAccountRow(
+        owner_id=owner_id, balance=settings.ai_trial_credits, updated_at=utcnow()
+    )
+    session.add(account)
+    session.add(
+        _ledger(
+            owner_id,
+            settings.ai_trial_credits,
+            "grant",
+            f"trial:{owner_id}",
+        )
+    )
+    if commit:
+        try:
+            session.commit()
+        except IntegrityError:
+            # Another request may have created the tenant's trial account while
+            # this transaction was pending. Reuse it instead of double-granting.
+            session.rollback()
+            existing = session.get(CreditAccountRow, owner_id)
+            if existing is None:
+                raise
+            return existing
+        session.refresh(account)
+    else:
+        session.flush()
+    return account
+
+
+def credit_balance(session: Session, owner_id: str) -> int:
+    return ensure_credit_account(session, owner_id).balance
+
+
+def credit_history(session: Session, owner_id: str) -> list[CreditLedgerRow]:
+    ensure_credit_account(session, owner_id)
+    return list(
+        session.exec(
+            select(CreditLedgerRow)
+            .where(CreditLedgerRow.owner_id == owner_id)
+            .order_by(CreditLedgerRow.created_at.desc())
+        ).all()
+    )
+
+
+def grant_credits(
+    session: Session,
+    owner_id: str,
+    amount: int,
+    *,
+    idempotency_key: str,
+    reference_id: str | None = None,
+) -> bool:
+    if amount < 1:
+        raise ValueError("Credit grant must be positive")
+    existing = session.exec(
+        select(CreditLedgerRow).where(
+            CreditLedgerRow.idempotency_key == idempotency_key
+        )
+    ).first()
+    if existing is not None:
+        # Persist a new webhook receipt that may be pending in this transaction.
+        session.commit()
+        return False
+    ensure_credit_account(session, owner_id, commit=False)
+    session.exec(
+        update(CreditAccountRow)
+        .where(CreditAccountRow.owner_id == owner_id)
+        .values(balance=CreditAccountRow.balance + amount, updated_at=utcnow())
+    )
+    session.add(_ledger(owner_id, amount, "grant", idempotency_key, reference_id))
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        if session.exec(
+            select(CreditLedgerRow).where(
+                CreditLedgerRow.idempotency_key == idempotency_key
+            )
+        ).first():
+            return False
+        raise
+    return True
+
+
+def reserve_generation(
+    session: Session,
+    *,
+    owner_id: str,
+    prompt: str,
+    model: str,
+    input_asset_id: str | None,
+    idempotency_key: str,
+) -> GenerationJobRow:
+    request_key = f"{owner_id}:{idempotency_key}"
+    existing = session.exec(
+        select(GenerationJobRow).where(
+            GenerationJobRow.client_request_id == request_key,
+            GenerationJobRow.owner_id == owner_id,
+        )
+    ).first()
+    if existing is not None:
+        return existing
+    if input_asset_id is not None:
+        asset = session.exec(
+            select(AssetRow).where(
+                AssetRow.id == input_asset_id, AssetRow.owner_id == owner_id
+            )
+        ).first()
+        if asset is None:
+            raise ValueError("Input asset was not found")
+
+    ensure_credit_account(session, owner_id)
+    cost = settings.ai_generation_cost
+    result = session.exec(
+        update(CreditAccountRow)
+        .where(
+            CreditAccountRow.owner_id == owner_id,
+            CreditAccountRow.balance >= cost,
+        )
+        .values(balance=CreditAccountRow.balance - cost, updated_at=utcnow())
+    )
+    if result.rowcount != 1:  # type: ignore[attr-defined]
+        session.rollback()
+        raise InsufficientCreditsError("Not enough credits")
+
+    entity = GenerationJob(
+        owner_id=owner_id,
+        prompt=prompt,
+        model=model,
+        provider=settings.ai_provider,
+        cost_credits=cost,
+        client_request_id=request_key,
+        input_asset_id=input_asset_id,
+    )
+    row = GenerationJobRow(
+        id=entity.id,
+        owner_id=entity.owner_id,
+        prompt=entity.prompt,
+        model=entity.model,
+        provider=entity.provider,
+        status=entity.status.value,
+        cost_credits=entity.cost_credits,
+        input_asset_id=entity.input_asset_id,
+        client_request_id=entity.client_request_id,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+    session.add(row)
+    session.add(
+        _ledger(owner_id, -cost, "reserve", f"reserve:{row.id}", row.id)
+    )
+    try:
+        session.commit()
+    except IntegrityError:
+        # A concurrent retry with the same client key won the unique insert.
+        # Its balance reservation committed; ours was rolled back atomically.
+        session.rollback()
+        existing = session.exec(
+            select(GenerationJobRow).where(
+                GenerationJobRow.client_request_id == request_key,
+                GenerationJobRow.owner_id == owner_id,
+            )
+        ).first()
+        if existing is None:
+            raise
+        return existing
+    session.refresh(row)
+    return row
+
+
+def _refund(session: Session, job: GenerationJobRow) -> None:
+    key = f"refund:{job.id}"
+    if session.exec(
+        select(CreditLedgerRow).where(CreditLedgerRow.idempotency_key == key)
+    ).first():
+        return
+    session.exec(
+        update(CreditAccountRow)
+        .where(CreditAccountRow.owner_id == job.owner_id)
+        .values(
+            balance=CreditAccountRow.balance + job.cost_credits,
+            updated_at=utcnow(),
+        )
+    )
+    session.add(
+        _ledger(job.owner_id, job.cost_credits, "refund", key, job.id)
+    )
+
+
+def succeed_job(session: Session, job: GenerationJobRow, output_url: str) -> None:
+    if job.status in {
+        JobStatus.SUCCEEDED.value,
+        JobStatus.FAILED.value,
+        JobStatus.CANCELLED.value,
+    }:
+        session.commit()
+        return
+    job.status = JobStatus.SUCCEEDED.value
+    job.output_url = output_url
+    job.error = None
+    job.updated_at = utcnow()
+    consume_key = f"consume:{job.id}"
+    if not session.exec(
+        select(CreditLedgerRow).where(CreditLedgerRow.idempotency_key == consume_key)
+    ).first():
+        session.add(_ledger(job.owner_id, 0, "consume", consume_key, job.id))
+    session.add(job)
+    session.commit()
+    logger.info("AI generation succeeded", extra={"job_id": job.id, "owner_id": job.owner_id})
+
+
+def fail_job(session: Session, job: GenerationJobRow, error: str) -> None:
+    if job.status in {
+        JobStatus.SUCCEEDED.value,
+        JobStatus.FAILED.value,
+        JobStatus.CANCELLED.value,
+    }:
+        session.commit()
+        return
+    job.status = JobStatus.FAILED.value
+    job.error = error[:2000]
+    job.updated_at = utcnow()
+    _refund(session, job)
+    session.add(job)
+    session.commit()
+    logger.warning(
+        "AI generation failed",
+        extra={"job_id": job.id, "owner_id": job.owner_id, "error": job.error},
+    )
+
+
+def cancel_job(session: Session, job: GenerationJobRow) -> None:
+    if job.status in {
+        JobStatus.SUCCEEDED.value,
+        JobStatus.FAILED.value,
+        JobStatus.CANCELLED.value,
+    }:
+        return
+    job.status = JobStatus.CANCELLED.value
+    job.error = "Cancelled by user"
+    job.updated_at = utcnow()
+    _refund(session, job)
+    session.add(job)
+    session.commit()
+
+
+def reconcile_job(session: Session, job: GenerationJobRow) -> GenerationJobRow:
+    if job.status != JobStatus.RUNNING.value or not job.provider_request_id:
+        return job
+    try:
+        result = configured_provider().poll(job.provider_request_id)
+        if result.status is ProviderResultStatus.SUCCEEDED and result.output_url:
+            succeed_job(session, job, result.output_url)
+        elif result.status is ProviderResultStatus.FAILED:
+            fail_job(session, job, result.error or "Provider failed")
+    except Exception as exc:
+        job.error = f"Reconciliation failed: {exc}"[:2000]
+        job.updated_at = utcnow()
+        session.add(job)
+        session.commit()
+    session.refresh(job)
+    return job
+
+
+def process_job(session: Session, job: GenerationJobRow) -> GenerationJobRow:
+    if job.status != JobStatus.QUEUED.value:
+        return job
+    claimed_at = utcnow()
+    claim = session.exec(
+        update(GenerationJobRow)
+        .where(
+            GenerationJobRow.id == job.id,
+            GenerationJobRow.status == JobStatus.QUEUED.value,
+        )
+        .values(status=JobStatus.RUNNING.value, updated_at=claimed_at)
+    )
+    session.commit()
+    if claim.rowcount != 1:  # type: ignore[attr-defined]
+        session.refresh(job)
+        return job
+    job.status = JobStatus.RUNNING.value
+    job.updated_at = claimed_at
+    logger.info(
+        "AI generation claimed",
+        extra={"job_id": job.id, "owner_id": job.owner_id, "provider": job.provider},
+    )
+    try:
+        input_url = None
+        if job.input_asset_id:
+            input_url = asset_access_url(job.input_asset_id)
+        result = configured_provider().submit(
+            GenerationRequest(
+                job_id=job.id,
+                prompt=job.prompt,
+                model=job.model,
+                input_url=input_url,
+                callback_url=(
+                    f"{settings.ai_public_url.rstrip('/')}/api/ai/webhooks/provider/{job.provider}"
+                ),
+            )
+        )
+        if result.request_id:
+            job.provider_request_id = result.request_id
+        if result.status is ProviderResultStatus.SUCCEEDED and result.output_url:
+            succeed_job(session, job, result.output_url)
+        elif result.status is ProviderResultStatus.FAILED:
+            fail_job(session, job, result.error or "Provider failed")
+        else:
+            session.add(job)
+            session.commit()
+    except Exception as exc:
+        fail_job(session, job, str(exc))
+    session.refresh(job)
+    return job
+
+
+def process_job_by_id(job_id: str) -> None:
+    with Session(engine) as session:
+        job = session.get(GenerationJobRow, job_id)
+        if job is not None:
+            process_job(session, job)
+
+
+def process_queued(limit: int = 10) -> int:
+    with Session(engine) as session:
+        # A worker can die after claiming but before persisting the provider's
+        # request ID. Reclaim the lease; gateways must deduplicate on job_id.
+        stale_before = utcnow() - timedelta(seconds=settings.ai_job_lease_seconds)
+        session.exec(
+            update(GenerationJobRow)
+            .where(
+                GenerationJobRow.status == JobStatus.RUNNING.value,
+                GenerationJobRow.provider_request_id.is_(None),
+                GenerationJobRow.updated_at < stale_before,
+            )
+            .values(
+                status=JobStatus.QUEUED.value,
+                error="Requeued after worker lease expired",
+                updated_at=utcnow(),
+            )
+        )
+        session.commit()
+        jobs = list(
+            session.exec(
+                select(GenerationJobRow)
+                .where(GenerationJobRow.status == JobStatus.QUEUED.value)
+                .order_by(GenerationJobRow.created_at)
+                .limit(limit)
+            ).all()
+        )
+        for job in jobs:
+            process_job(session, job)
+        running = list(
+            session.exec(
+                select(GenerationJobRow)
+                .where(
+                    GenerationJobRow.status == JobStatus.RUNNING.value,
+                    GenerationJobRow.provider_request_id.is_not(None),
+                )
+                .order_by(GenerationJobRow.updated_at)
+                .limit(limit)
+            ).all()
+        )
+        for job in running:
+            reconcile_job(session, job)
+        return len(jobs) + len(running)
+
+
+def record_webhook(
+    session: Session, event_id: str, provider: str, event_type: str
+) -> bool:
+    storage_id = f"{provider}:{event_id}"
+    if session.get(WebhookEventRow, storage_id) is not None:
+        return False
+    session.add(
+        WebhookEventRow(
+            id=storage_id,
+            provider=provider,
+            event_type=event_type,
+            received_at=utcnow(),
+        )
+    )
+    return True
+{% else %}
+"""AI runtime services are generated when include_ai_saas=true."""
+{% endif %}

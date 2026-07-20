@@ -28,6 +28,7 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `python_version` | choice | `3.12` or `3.13` |
 | `desktop_framework` | choice | `pywebview` (default), `electron`, `tauri` or `none`; selects which desktop app directory (if any) is generated and shapes the CLI's `desktop`/`build desktop` commands |
 | `database` | choice | `sqlite` (default) or `postgres`; shapes the Docker stack, backend dependencies and `.env.example` |
+| `include_ai_saas` | bool | Generates the optional AI Studio, provider-neutral runtime, durable jobs/worker, tenant ownership, uploads, credit ledger and Stripe credit packs |
 | `include_docker` | bool | Generates `docker-compose.yml`, Dockerfiles, `nginx.conf`, `.dockerignore` and the `stack` CLI group |
 | `include_tunnel` | bool | Adds the cloudflared quick-tunnel service and `stack share` (asked only when Docker is on) |
 
@@ -41,6 +42,7 @@ All rendered files live under `template/`. Files ending in `.jinja` are rendered
 | `<pkg_slug>_desktop` | pywebview shell and in-process request bridge (only with `desktop_framework=pywebview`; Electron/Tauri generate `apps/desktop-electron/` / `apps/desktop-tauri/` with a `server.py` sidecar instead) |
 | `<pkg_slug>_plugin_api` | Plugin manifest, contract, health and registry helpers |
 | `<pkg_slug>_licensing` | License providers, token signing and plan resolution |
+| `<pkg_slug>_ai_runtime` | Provider-neutral generation domain, result types and job transitions (only with `include_ai_saas=true`) |
 
 ## Frontend package
 
@@ -63,6 +65,8 @@ In browser mode, requests go to the backend over HTTP. In desktop mode, the same
 | Plugin | `extensions/*` or a separate package exposing `<pkg_slug>.plugins` entry points |
 | Marketplace catalog | `marketplace/catalog.json` (or a hosted URL via `APP_MARKETPLACE_URL`) |
 | Auth enforcement | `apps/backend/src/<pkg_slug>_backend/auth.py` (`enforce_auth`, `require_admin`) |
+| AI provider | `apps/backend/src/<pkg_slug>_backend/adapters/ai_provider.py` (`AIProvider` implementations) |
+| AI asset storage | `apps/backend/src/<pkg_slug>_backend/adapters/asset_store.py` |
 | CI workflows | `.github/workflows/ci.yml` (tests, typed-client drift gate) and `release.yml` (tag-triggered desktop installers, when a desktop shell was selected) |
 
 ## Demo markers

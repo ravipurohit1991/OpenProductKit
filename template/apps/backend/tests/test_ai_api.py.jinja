@@ -1,0 +1,241 @@
+{% if include_ai_saas %}
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
+from {{ pkg_slug }}_backend import ai_runtime
+from {{ pkg_slug }}_backend.adapters.db.engine import engine
+from {{ pkg_slug }}_backend.adapters.db.models import (
+    CreditLedgerRow,
+    GenerationJobRow,
+)
+from {{ pkg_slug }}_backend.app import app
+from {{ pkg_slug }}_backend.settings import settings
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "ai_upload_dir", str(tmp_path / "uploads"))
+    with TestClient(app) as value:
+        yield value
+
+
+def test_generation_reserves_and_consumes_one_credit_idempotently(client) -> None:
+    before = client.get("/api/ai/credits").json()
+    assert before["balance"] == settings.ai_trial_credits
+
+    headers = {"Idempotency-Key": "same-request"}
+    first = client.post(
+        "/api/ai/generations",
+        headers=headers,
+        json={"prompt": "A clean product photograph", "model": "mock-image"},
+    )
+    assert first.status_code == 202
+    second = client.post(
+        "/api/ai/generations",
+        headers=headers,
+        json={"prompt": "A clean product photograph", "model": "mock-image"},
+    )
+    assert second.status_code == 202
+    assert second.json()["id"] == first.json()["id"]
+
+    jobs = client.get("/api/ai/generations").json()
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "succeeded"
+    assert jobs[0]["output_url"].startswith("data:image/png;base64,")
+    credits = client.get("/api/ai/credits").json()
+    assert credits["balance"] == settings.ai_trial_credits - 1
+    assert [entry["kind"] for entry in credits["history"]].count("reserve") == 1
+
+
+def test_trial_credit_account_is_persisted_once() -> None:
+    owner_id = "trial-persistence-test"
+    with Session(engine) as session:
+        assert ai_runtime.credit_balance(session, owner_id) == settings.ai_trial_credits
+        assert ai_runtime.credit_balance(session, owner_id) == settings.ai_trial_credits
+        grants = session.exec(
+            select(CreditLedgerRow).where(CreditLedgerRow.owner_id == owner_id)
+        ).all()
+        assert [entry.kind for entry in grants] == ["grant"]
+
+
+def test_generation_input_constraints_are_enforced(client) -> None:
+    assert client.post("/api/ai/generations", json={"prompt": ""}).status_code == 422
+    assert (
+        client.post("/api/ai/generations", json={"prompt": "x" * 4001}).status_code
+        == 422
+    )
+
+
+def test_upload_validates_mime_signature(client) -> None:
+    bad = client.post(
+        "/api/ai/uploads", files={"file": ("fake.png", b"not a png", "image/png")}
+    )
+    assert bad.status_code == 422
+
+    tiny_png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+        "0000000d4944415408d763f8ffff3f030008fc02fe8fede16f0000000049454e44ae426082"
+    )
+    uploaded = client.post(
+        "/api/ai/uploads", files={"file": ("pixel.png", tiny_png, "image/png")}
+    )
+    assert uploaded.status_code == 201
+    fetched = client.get(uploaded.json()["url"])
+    assert fetched.status_code == 200
+    assert fetched.content == tiny_png
+
+
+def _stripe_signature(payload: bytes, secret: str) -> str:
+    timestamp = int(time.time())
+    digest = hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + payload, hashlib.sha256
+    ).hexdigest()
+    return f"t={timestamp},v1={digest}"
+
+
+def test_stripe_webhook_credit_grant_is_idempotent(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    balance_before = client.get("/api/ai/credits").json()["balance"]
+    payload = json.dumps(
+        {
+            "id": "evt_checkout_once",
+            "object": "event",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_paid_once",
+                    "object": "checkout.session",
+                    "payment_status": "paid",
+                    "client_reference_id": "__local__",
+                    "metadata": {"owner_id": "__local__", "credits": "25"},
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {"stripe-signature": _stripe_signature(payload, "whsec_test")}
+    first = client.post("/api/ai/webhooks/stripe", content=payload, headers=headers)
+    second = client.post("/api/ai/webhooks/stripe", content=payload, headers=headers)
+    assert first.status_code == 200
+    assert second.json() == {"status": "duplicate"}
+    assert client.get("/api/ai/credits").json()["balance"] == balance_before + 25
+
+
+def test_provider_webhook_requires_hmac(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_webhook_secret", "provider-secret")
+    response = client.post(
+        "/api/ai/webhooks/provider/http",
+        json={"event_id": "event-1", "request_id": "request-1", "status": "failed"},
+    )
+    assert response.status_code == 400
+
+
+def test_provider_failure_callback_refunds_once(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "http")
+    monkeypatch.setattr(settings, "ai_inline_jobs", False)
+    monkeypatch.setattr(settings, "ai_webhook_secret", "provider-secret")
+    balance_before = client.get("/api/ai/credits").json()["balance"]
+    created = client.post(
+        "/api/ai/generations",
+        headers={"Idempotency-Key": "provider-refund-once"},
+        json={"prompt": "A request that the provider rejects"},
+    )
+    assert created.status_code == 202
+    job_id = created.json()["id"]
+    with Session(engine) as session:
+        job = session.get(GenerationJobRow, job_id)
+        assert job is not None
+        job.status = "running"
+        job.provider_request_id = "provider-request-refund"
+        session.add(job)
+        session.commit()
+
+    payload = json.dumps(
+        {
+            "event_id": "provider-event-refund",
+            "request_id": "provider-request-refund",
+            "status": "failed",
+            "error": "provider rejected request",
+        },
+        separators=(",", ":"),
+    ).encode()
+    signature = hmac.new(
+        b"provider-secret", payload, hashlib.sha256
+    ).hexdigest()
+    headers = {"X-OPK-Signature": f"sha256={signature}"}
+    first = client.post(
+        "/api/ai/webhooks/provider/http", content=payload, headers=headers
+    )
+    second = client.post(
+        "/api/ai/webhooks/provider/http", content=payload, headers=headers
+    )
+    assert first.json() == {"status": "accepted"}
+    assert second.json() == {"status": "duplicate"}
+    assert client.get("/api/ai/credits").json()["balance"] == balance_before
+
+
+def test_webhook_payload_size_is_bounded(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_webhook_secret", "provider-secret")
+    response = client.post(
+        "/api/ai/webhooks/provider/http",
+        content=b"x" * (1024 * 1024 + 1),
+        headers={"X-OPK-Signature": "ignored"},
+    )
+    assert response.status_code == 413
+
+
+def test_cancelled_job_ignores_late_provider_success(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "http")
+    monkeypatch.setattr(settings, "ai_inline_jobs", False)
+    monkeypatch.setattr(settings, "ai_webhook_secret", "provider-secret")
+    balance_before = client.get("/api/ai/credits").json()["balance"]
+    created = client.post(
+        "/api/ai/generations",
+        headers={"Idempotency-Key": "cancel-before-callback"},
+        json={"prompt": "Cancel this request"},
+    )
+    job_id = created.json()["id"]
+    with Session(engine) as session:
+        job = session.get(GenerationJobRow, job_id)
+        assert job is not None
+        job.status = "running"
+        job.provider_request_id = "provider-request-cancelled"
+        session.add(job)
+        session.commit()
+    cancelled = client.post(f"/api/ai/generations/{job_id}/cancel")
+    assert cancelled.json()["status"] == "cancelled"
+
+    payload = json.dumps(
+        {
+            "event_id": "provider-event-after-cancel",
+            "request_id": "provider-request-cancelled",
+            "status": "succeeded",
+            "output_url": "https://provider.example/too-late.png",
+        },
+        separators=(",", ":"),
+    ).encode()
+    signature = hmac.new(
+        b"provider-secret", payload, hashlib.sha256
+    ).hexdigest()
+    headers = {"X-OPK-Signature": signature}
+    assert client.post(
+        "/api/ai/webhooks/provider/http", content=payload, headers=headers
+    ).json() == {"status": "accepted"}
+    assert client.post(
+        "/api/ai/webhooks/provider/http", content=payload, headers=headers
+    ).json() == {"status": "duplicate"}
+    final = client.get(f"/api/ai/generations/{job_id}").json()
+    assert final["status"] == "cancelled"
+    assert final["output_url"] is None
+    assert client.get("/api/ai/credits").json()["balance"] == balance_before
+{% else %}
+"""AI API tests are generated when include_ai_saas=true."""
+{% endif %}

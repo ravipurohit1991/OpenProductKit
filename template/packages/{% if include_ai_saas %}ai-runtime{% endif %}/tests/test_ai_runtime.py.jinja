@@ -1,0 +1,32 @@
+import pytest
+
+from {{ pkg_slug }}_ai_runtime import (
+    GenerationJob,
+    InvalidTransitionError,
+    JobStatus,
+    transition,
+)
+
+
+def job() -> GenerationJob:
+    return GenerationJob(
+        owner_id="user-1",
+        prompt="A product photo",
+        model="image-v1",
+        provider="mock",
+        cost_credits=1,
+        client_request_id="request-1",
+    )
+
+
+def test_generation_state_machine() -> None:
+    running = transition(job(), JobStatus.RUNNING)
+    done = transition(running, JobStatus.SUCCEEDED, output_url="https://example.test/out.png")
+    assert done.status is JobStatus.SUCCEEDED
+
+
+def test_terminal_jobs_cannot_transition() -> None:
+    running = transition(job(), JobStatus.RUNNING)
+    done = transition(running, JobStatus.FAILED, error="provider failed")
+    with pytest.raises(InvalidTransitionError):
+        transition(done, JobStatus.RUNNING)

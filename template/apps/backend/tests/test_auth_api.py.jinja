@@ -120,3 +120,18 @@ def test_operator_actions_need_admin(client, auth_on) -> None:
     resp = client.delete(f"/api/auth/users/{dave_id}", headers=admin_headers)
     assert resp.status_code == 200
     assert client.get("/api/projects", headers=user_headers).status_code == 401
+
+
+def test_domain_rows_are_scoped_to_the_signed_in_user(client, auth_on) -> None:
+    alice = _add_user(client, "tenant-alice@example.com")
+    bob = _add_user(client, "tenant-bob@example.com")
+
+    created = client.post("/api/projects", headers=alice, json={"name": "Alice only"})
+    assert created.status_code == 201
+    project_id = created.json()["id"]
+
+    assert {p["name"] for p in client.get("/api/projects", headers=alice).json()} == {
+        "Alice only"
+    }
+    assert client.get(f"/api/projects/{project_id}", headers=bob).status_code == 404
+    assert client.get("/api/projects", headers=bob).json() == []

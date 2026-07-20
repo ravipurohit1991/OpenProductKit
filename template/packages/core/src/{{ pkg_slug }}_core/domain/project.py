@@ -19,9 +19,12 @@ def _now() -> datetime:
 @dataclass(frozen=True, slots=True)
 class Project:
     name: str
+    owner_id: str = "__local__"
     id: str = field(default_factory=_new_id)
     created_at: datetime = field(default_factory=_now)
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("Project name must not be empty")
+        if not self.owner_id:
+            raise ValueError("Project must have an owner")
